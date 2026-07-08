@@ -1,0 +1,8 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+
+# Local backups exported by the app
+PFT_backup_*.json
+PFT_scores_*.csv

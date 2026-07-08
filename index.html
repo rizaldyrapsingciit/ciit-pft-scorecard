@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CIIT PFT Scorecard System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- ===================== LOGIN SCREEN ===================== -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="login-logo">PFT</div>
+        <h1>PFT Scorecard System</h1>
+        <p class="login-sub" id="loginSchool">CIIT College of Innovation and Integrated Technology</p>
+        <p class="login-course" id="loginCourse">PED001 – PATHFIT 1</p>
+      </div>
+
+      <div class="login-body">
+        <p class="login-hint">Sign in to manage your students' Physical Fitness Test results.</p>
+
+        <!-- Real Google Sign-In renders here when configured -->
+        <div id="googleBtnHolder" class="google-holder"></div>
+        <div class="divider hidden">— or sign in manually —</div>
+
+        <!-- Fallback local sign-in (always available) -->
+        <div id="localLogin" class="local-login">
+          <label class="field">
+            <span>Your name</span>
+            <input type="text" id="teacherName" placeholder="e.g. Coach Maria Santos" autocomplete="name" />
+          </label>
+          <label class="field">
+            <span>CIIT email</span>
+            <input type="email" id="teacherEmail" placeholder="you@ciit.edu.ph" autocomplete="email" />
+          </label>
+          <button class="btn btn-primary btn-block" id="localLoginBtn">Sign in</button>
+          <p class="login-note" id="localNote"></p>
+        </div>
+      </div>
+      <div class="login-foot" id="loginYear">1st Term S.Y. 2025 – 2026</div>
+    </div>
+  </div>
+
+  <!-- ===================== APP SHELL ===================== -->
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">PFT</div>
+        <div class="brand-text">
+          <strong>PFT Scorecard</strong>
+          <span id="sideCourse">PATHFIT 1</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="classes">
+          <span class="nav-ico">📚</span> Classes
+        </button>
+        <button class="nav-item" data-view="dashboard">
+          <span class="nav-ico">📊</span> Dashboard
+        </button>
+        <button class="nav-item" data-view="manage">
+          <span class="nav-ico">🗂️</span> Manage Data
+        </button>
+        <button class="nav-item" data-view="reports">
+          <span class="nav-ico">📄</span> Reports
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <button class="nav-item subtle" id="helpBtn"><span class="nav-ico">❓</span> Help</button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <h2 id="pageTitle">Dashboard</h2>
+          <p class="topbar-sub" id="pageSub">Overview of your class fitness results</p>
+        </div>
+        <div class="topbar-right">
+          <div class="user-chip">
+            <div class="avatar" id="userAvatar">T</div>
+            <div class="user-meta">
+              <strong id="userName">Teacher</strong>
+              <span id="userEmail">—</span>
+            </div>
+          </div>
+          <button class="btn btn-ghost" id="logoutBtn">Log out</button>
+        </div>
+      </header>
+
+      <main class="content" id="content"><!-- views injected here --></main>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL HOST ===================== -->
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root"></div>
+
+  <!-- Chart.js for the dashboard graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Google Identity Services (used only if a Client ID is configured) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <script src="js/config.js"></script>
+  <script src="js/scoring.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
