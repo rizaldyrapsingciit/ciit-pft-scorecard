@@ -139,6 +139,9 @@ body {
 .user-meta { display: flex; flex-direction: column; line-height: 1.2; }
 .user-meta strong { font-size: 14px; }
 .user-meta span { font-size: 12px; color: var(--ink-3); }
+.storage-badge { font-size: 11px; font-weight: 600; margin-top: 2px; }
+.storage-badge.shared { color: #1a7f37; }
+.storage-badge.local { color: var(--ink-3); }
 
 .content { padding: 26px 28px 60px; }
 

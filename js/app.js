@@ -384,6 +384,18 @@
     } else {
       av.textContent = initials(currentUser.name);
     }
+    const badge = $("#storageBadge");
+    if (badge) {
+      if (cloudEnabled) {
+        badge.textContent = "● Shared database";
+        badge.title = "Signed in with Google. Classes and scorecards are shared with all CIIT teachers.";
+        badge.className = "storage-badge shared";
+      } else {
+        badge.textContent = "● This device only";
+        badge.title = "Data is saved privately in this browser. Use Manage Data → Backup to move it.";
+        badge.className = "storage-badge local";
+      }
+    }
     navigate("classes");
   }
 
