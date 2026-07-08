@@ -17,17 +17,28 @@
   const WINGS = ["Left", "Right"];
   const TERMS = ["1", "2", "3"];
 
-  // Academic years, most-recent first. The school year is treated as starting
-  // in June, so Jan–May still counts as the previous year's AY.
-  function academicYears() {
+  // CIIT runs on trimesters: Term 1 starts August, Term 2 December,
+  // Term 3 April. The academic year therefore starts in August, so
+  // Jan–Jul still counts as the previous year's AY.
+  function currentAYStart() {
     const now = new Date();
-    let start = now.getFullYear();
-    if (now.getMonth() < 5) start -= 1; // Jan–May belongs to the prior AY
+    return now.getMonth() + 1 >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+  }
+  // Academic years, most-recent first (next year included at the top).
+  function academicYears() {
+    const start = currentAYStart();
     const out = [];
     for (let y = start + 1; y >= start - 5; y--) out.push(`${y}-${y + 1}`);
     return out;
   }
-  const latestAY = () => academicYears()[1]; // index 0 is next year; 1 is current
+  const currentAY = () => { const s = currentAYStart(); return `${s}-${s + 1}`; };
+  // Trimester currently in progress: 1 = Aug–Nov, 2 = Dec–Mar, 3 = Apr–Jul.
+  function currentTerm() {
+    const m = new Date().getMonth() + 1;
+    if (m >= 8 && m <= 11) return "1";
+    if (m === 12 || m <= 3) return "2";
+    return "3";
+  }
 
   const optionList = (arr, selected) =>
     ['<option value="">— select —</option>']
@@ -247,7 +258,6 @@
     $("#loginSchool").textContent = CFG.schoolName;
     $("#loginCourse").textContent = CFG.courseName;
     $("#loginYear").textContent = CFG.schoolYear;
-    $("#sideCourse").textContent = CFG.courseName.replace(/^.*–\s*/, "") || CFG.courseName;
     document.title = CFG.systemName;
   }
 
@@ -676,8 +686,8 @@
 
   function openClassModal(cls) {
     const editing = cls || null;
-    const ay = editing ? editing.academicYear : latestAY();
-    const term = editing ? editing.term : "1";
+    const ay = editing ? editing.academicYear : currentAY();
+    const term = editing ? editing.term : currentTerm();
     const body = `
       <div class="field-grid modal-grid">
         <label class="field"><span>Academic Year</span><select id="cfAY">${ayOptionsHTML(ay)}</select></label>
@@ -1141,8 +1151,8 @@
   function renderEntry(c, id) {
     const editing = id ? Store.get(id) : null;
     const r = editing || {};
-    const ayValue = r.academicYear || latestAY();
-    const termValue = r.term || "1";
+    const ayValue = r.academicYear || currentAY();
+    const termValue = r.term || currentTerm();
     const lockClass = !!r.classId;
     const dis = lockClass ? "disabled" : "";
 
