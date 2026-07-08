@@ -8,6 +8,7 @@
   const AUTH_KEY = "ciit_pft_auth_v1";
   let currentUser = null;
   let charts = {};
+  let cloudEnabled = false;
 
   // Fixed choices (help teachers avoid typing mistakes)
   const COURSES = ["PATHFIT 1", "PATHFIT 2", "PATHFIT 3", "PATHFIT 4"];
@@ -297,6 +298,55 @@
     start();
   }
 
+  // Real "Sign in with Google" + shared database (Firebase). Only used when
+  // firebase.enabled is true in config and the SDK initialised successfully.
+  function initCloudAuth() {
+    const hd = (CFG.allowedEmailDomains && CFG.allowedEmailDomains[0]) || "";
+
+    // Hide the simple name/email login — a real Google account is required.
+    $("#localLogin")?.classList.add("hidden");
+    $(".divider")?.classList.add("hidden");
+
+    const holder = $("#googleBtnHolder");
+    holder.innerHTML =
+      `<button class="btn btn-primary btn-block" id="cloudGoogleBtn">Sign in with Google</button>
+       <p class="login-note">Use your CIIT (${esc(hd || "ciit.edu.ph")}) Google account.</p>`;
+    $("#cloudGoogleBtn").onclick = () => {
+      Cloud.signInWithGoogle(hd).catch((e) => {
+        if (e && e.code === "auth/popup-closed-by-user") return;
+        toast("Sign-in failed. " + (e && e.message ? e.message : ""), "err");
+      });
+    };
+
+    // Firebase remembers the session, so this fires on every load/sign-in.
+    Cloud.onAuth((user) => {
+      if (!user) {
+        currentUser = null;
+        Cloud.stop();
+        $("#app").classList.add("hidden");
+        $("#loginScreen").classList.remove("hidden");
+        return;
+      }
+      if (!domainAllowed(user.email)) {
+        toast("Please use your CIIT (" + (hd || "ciit.edu.ph") + ") account.", "err");
+        Cloud.signOut();
+        return;
+      }
+      currentUser = {
+        name: user.displayName || nameFromEmail(user.email) || user.email,
+        email: user.email,
+        picture: user.photoURL || "",
+        via: "google",
+      };
+      // Live-sync the shared database into local storage, then re-render.
+      Cloud.start(({ records, classes }) => {
+        Store.applyRemote(records, classes);
+        refresh();
+      });
+      enterApp();
+    });
+  }
+
   function localSignIn() {
     const name = $("#teacherName").value.trim();
     const email = $("#teacherEmail").value.trim();
@@ -313,6 +363,11 @@
     localStorage.removeItem(AUTH_KEY);
     currentUser = null;
     if (window.google && google.accounts) google.accounts.id.disableAutoSelect();
+    if (cloudEnabled) {
+      // onAuth handles showing the login screen once sign-out completes.
+      Cloud.signOut();
+      return;
+    }
     $("#app").classList.add("hidden");
     $("#loginScreen").classList.remove("hidden");
   }
@@ -485,7 +540,19 @@
     reports: ["Reports", "Printable scorecards and class summaries"],
   };
 
+  let currentView = "classes";
+  let currentArg = null;
+
+  // Re-render the current view (used when shared cloud data changes). We never
+  // refresh the entry form, so a teacher's unsaved typing is never wiped out.
+  function refresh() {
+    if (currentView === "entry") return;
+    navigate(currentView, currentArg);
+  }
+
   function navigate(view, arg) {
+    currentView = view;
+    currentArg = arg;
     const navKey = { class: "classes", entry: "classes" }[view] || view;
     $$(".nav-item[data-view]").forEach((b) =>
       b.classList.toggle("active", b.dataset.view === navKey));
@@ -1939,7 +2006,21 @@
    * ========================================================== */
   function boot() {
     applyBranding();
-    initGoogle();
+
+    // Turn on shared login + database if configured; otherwise keep the
+    // original per-device behaviour.
+    cloudEnabled = Cloud.init(CFG.firebase);
+    if (cloudEnabled) {
+      Store.setSync((type, payload) => {
+        if (type === "record") Cloud.pushRecord(payload);
+        else if (type === "record:remove") Cloud.removeRecord(payload);
+        else if (type === "class") Cloud.pushClass(payload);
+        else if (type === "class:remove") Cloud.removeClass(payload);
+      });
+      initCloudAuth();
+    } else {
+      initGoogle();
+    }
 
     $("#localLoginBtn").onclick = localSignIn;
     $("#teacherEmail").addEventListener("keydown", (e) => { if (e.key === "Enter") localSignIn(); });
@@ -1947,11 +2028,13 @@
     $("#helpBtn").onclick = showHelp;
     $$(".nav-item[data-view]").forEach((b) => b.onclick = () => navigate(b.dataset.view));
 
-    // Restore session
-    try {
-      const saved = JSON.parse(localStorage.getItem(AUTH_KEY));
-      if (saved && saved.email) { currentUser = saved; enterApp(); }
-    } catch (e) {}
+    // Restore session (local mode only — Firebase restores its own session).
+    if (!cloudEnabled) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(AUTH_KEY));
+        if (saved && saved.email) { currentUser = saved; enterApp(); }
+      } catch (e) {}
+    }
   }
 
   document.addEventListener("DOMContentLoaded", boot);

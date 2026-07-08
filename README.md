@@ -11,10 +11,11 @@ Share that link with anyone — it works from any device or network (no shared W
 
 > **Please note two things about how it works:**
 >
-> 1. **Data is per-device.** Each person's scorecards are saved privately in *their own
->    browser* (localStorage). The link shares the *app*, not the data. To move records
->    between people or devices, use **Manage Data → Backup** to download a file and
->    **Restore** to load it elsewhere.
+> 1. **Data is per-device by default.** Each person's scorecards are saved privately in
+>    *their own browser* (localStorage). The link shares the *app*, not the data. To move
+>    records between people or devices, use **Manage Data → Backup** to download a file and
+>    **Restore** to load it elsewhere. *(Want every teacher to share the same records
+>    instead? See [Shared login & database](#shared-login--database-recommended-for-admins).)*
 > 2. **The student list is loaded from a shared Google Sheet.** Because the site is
 >    public, anyone with the link who clicks *Pull from Google Sheet* can load the names
 >    on that sheet. Keep the sheet's sharing tight (or remove the sheet ID from
@@ -124,16 +125,69 @@ Save the file and reload — an official Google Sign-In button appears.
 
 ---
 
+## Shared login & database (recommended, for admins)
+
+Turn this on to get **both** of the things a real multi-teacher setup needs:
+
+- **Real "Sign in with Google"** restricted to CIIT accounts (no more manual name/email), and
+- **One shared online database** — every teacher signs in and sees the *same* classes and
+  scorecards, live, from any device or network.
+
+It uses **Firebase** (Google's free tier is plenty for a school). While it is turned off,
+the app behaves exactly as before (per-device data + simple local sign-in), so nothing
+breaks until you finish the steps below.
+
+### One-time setup
+
+1. **Create a project.** Go to <https://console.firebase.google.com> → **Add project**.
+2. **Add a Web app.** Project overview → the **`</>`** (Web) icon → register the app.
+   Firebase shows a `firebaseConfig` object — keep that screen open.
+3. **Enable Google sign-in.** Left menu → **Build → Authentication → Get started →
+   Sign-in method → Google → Enable → Save.**
+4. **Authorize your domains.** Authentication → **Settings → Authorized domains** →
+   add `localhost` and your live domain (e.g. `rizaldyrapsingciit.github.io`).
+5. **Create the database.** Build → **Firestore Database → Create database** →
+   *Production mode* → pick a location.
+6. **Lock it to CIIT accounts.** Firestore → **Rules** tab → replace everything with the
+   contents of [`firestore.rules`](firestore.rules) in this repo → **Publish**. This makes
+   sure only signed-in `@ciit.edu.ph` users can read or write.
+7. **Paste your keys.** Open `js/config.js`, find the `firebase` block, copy the matching
+   values from step 2, and set **`enabled: true`**:
+
+   ```js
+   firebase: {
+     enabled: true,
+     apiKey: "AIza…",
+     authDomain: "your-project.firebaseapp.com",
+     projectId: "your-project",
+     appId: "1:…:web:…",
+     storageBucket: "your-project.appspot.com",     // optional
+     messagingSenderId: "…",                          // optional
+   },
+   ```
+
+8. **Save, commit, and push** (see *Updating the live site*). Reload — the login screen now
+   shows only **Sign in with Google**, and all teachers share the same data.
+
+> **Note on existing records.** Data already saved on a device stays in that browser.
+> After enabling the cloud, the shared database becomes the source of truth. If you want to
+> carry old records over, sign in on that device and re-save them (or use **Manage Data →
+> Backup/Restore** onto a signed-in device) so they upload to the shared database.
+
+---
+
 ## Project structure
 
 ```
 CIIT PFT Scorecard/
 ├── index.html          Main page (login + app)
 ├── css/styles.css      Styling
-├── js/config.js        School info + Google Sign-In settings (edit me)
+├── js/config.js        School info + Google/Firebase settings (edit me)
 ├── js/scoring.js       BMI, Target Heart Rate, ratings logic
 ├── js/storage.js       Save/load/backup data in the browser
+├── js/cloud.js         Optional shared login + database (Firebase)
 ├── js/app.js           App screens and behavior
+├── firestore.rules     Database security rules (CIIT-only access)
 └── README.md           This file
 ```
 

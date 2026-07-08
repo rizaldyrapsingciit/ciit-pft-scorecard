@@ -11,6 +11,30 @@ window.Store = (function () {
   const ROSTER_KEY = "ciit_pft_roster_v1";
   const CLASS_KEY = "ciit_pft_classes_v1";
 
+  // Optional listener the app can register to mirror local changes to a shared
+  // cloud database. It is only fired for changes made *on this device* — never
+  // while applying data received from the cloud (to avoid echo loops).
+  let syncHandler = null;
+  let applyingRemote = false;
+  function setSync(fn) { syncHandler = fn; }
+  function notify(type, payload) {
+    if (syncHandler && !applyingRemote) {
+      try { syncHandler(type, payload); } catch (e) { console.error(e); }
+    }
+  }
+
+  // Replace local records/classes with a snapshot received from the cloud,
+  // without re-broadcasting the change back out.
+  function applyRemote(records, classes) {
+    applyingRemote = true;
+    try {
+      if (Array.isArray(records)) _write(records);
+      if (Array.isArray(classes)) _writeClasses(classes);
+    } finally {
+      applyingRemote = false;
+    }
+  }
+
   function _read() {
     try {
       return JSON.parse(localStorage.getItem(KEY)) || [];
@@ -55,11 +79,13 @@ window.Store = (function () {
       list.push(record);
     }
     _write(list);
+    notify("record", record);
     return record;
   }
 
   function remove(id) {
     _write(_read().filter((r) => r.id !== id));
+    notify("record:remove", id);
   }
 
   function clearAll() {
@@ -117,11 +143,13 @@ window.Store = (function () {
       list.push(cls);
     }
     _writeClasses(list);
+    notify("class", cls);
     return cls;
   }
 
   function classRemove(id) {
     _writeClasses(_readClasses().filter((c) => c.id !== id));
+    notify("class:remove", id);
   }
 
   /* ---------------- Backup (JSON) ---------------- */
@@ -218,6 +246,8 @@ window.Store = (function () {
     classGet,
     classSave,
     classRemove,
+    setSync,
+    applyRemote,
     exportJSON,
     importJSON,
     exportCSV,

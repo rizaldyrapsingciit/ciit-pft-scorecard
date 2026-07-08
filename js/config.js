@@ -27,6 +27,24 @@ window.PFT_CONFIG = {
   // Leave the list empty to allow any Google account.
   allowedEmailDomains: ["ciit.edu.ph"],
 
+  // ---- Shared login + database (Firebase) ----
+  // Turn this on to require real "Sign in with Google" (restricted to the
+  // domains in allowedEmailDomains) AND make every teacher share the same
+  // classes and scorecards from one online database.
+  //
+  // While enabled = false, the app works exactly as before (per-device data,
+  // simple local sign-in). To turn it on, follow README → "Shared login &
+  // database", paste the values from your Firebase project, and set enabled: true.
+  firebase: {
+    enabled: true,
+    apiKey: "AIzaSyBHCTHfX0LO68vPrJBPvvncHW_B5wWVsnM",
+    authDomain: "ciit-pft-scorecard.firebaseapp.com",        // e.g. "your-project.firebaseapp.com"
+    projectId: "ciit-pft-scorecard",
+    appId: "1:1072460773079:web:43f8e9bf6474b74e0ce292",
+    storageBucket: "ciit-pft-scorecard.firebasestorage.app",     // optional
+    messagingSenderId: "1072460773079", // optional
+  },
+
   // ---- Master student list (Google Sheet) ----
   // The app can pull the list of students from a Google Sheet so teachers
   // pick names from a pulldown instead of typing them.
