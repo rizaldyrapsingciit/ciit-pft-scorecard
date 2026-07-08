@@ -3,6 +3,35 @@
 A simple, no-installation web app for **PE teachers** to record, manage, and print
 **Physical Fitness Test (PFT)** results for CIIT's **PED001 – PATHFIT 1** course.
 
+## 🔗 Live site
+
+**https://rizaldyrapsingciit.github.io/ciit-pft-scorecard/**
+
+Share that link with anyone — it works from any device or network (no shared WiFi needed).
+
+> **Please note two things about how it works:**
+>
+> 1. **Data is per-device.** Each person's scorecards are saved privately in *their own
+>    browser* (localStorage). The link shares the *app*, not the data. To move records
+>    between people or devices, use **Manage Data → Backup** to download a file and
+>    **Restore** to load it elsewhere.
+> 2. **The student list is loaded from a shared Google Sheet.** Because the site is
+>    public, anyone with the link who clicks *Pull from Google Sheet* can load the names
+>    on that sheet. Keep the sheet's sharing tight (or remove the sheet ID from
+>    `js/config.js`) if that student info should stay private.
+
+### Updating the live site
+
+The site auto-rebuilds whenever you push to `main`:
+
+```bash
+git add -A
+git commit -m "Describe your change"
+git push
+```
+
+Changes usually appear within a minute.
+
 It follows the official CIIT PFT Scorecard:
 
 - **Part I — Health-Related Fitness Test (HRF):** Body Composition (BMI), Cardiovascular
