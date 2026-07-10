@@ -25,7 +25,8 @@ service cloud.firestore {
     function admins() {
       return [
         'kristine.dipalac@ciit.edu.ph',
-        'jillan.macalintal@ciit.edu.ph'
+        'jillan.macalintal@ciit.edu.ph',
+        'rizaldy.rapsing@ciit.edu.ph'
       ];
     }
     function isAdmin() { return isCiit() && email() in admins(); }

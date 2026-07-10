@@ -31,8 +31,16 @@
     if (TEACHER_EMAILS.includes(e)) return "teacher";
     return "student";
   }
-  const myEmail = () => lc(currentUser && currentUser.email);
-  const myRole = () => (currentUser && currentUser.role) || "student";
+
+  // Admin-only "Preview as" lens. Purely client-side: it changes what the UI
+  // shows so an admin can see a teacher's/student's view. It does NOT reduce
+  // the admin's real database permissions.
+  let preview = null; // { role, email, name } or null
+
+  const actualRole = () => (currentUser && currentUser.role) || "student";
+  const isRealAdmin = () => actualRole() === "admin";
+  const myEmail = () => lc(preview ? preview.email : (currentUser && currentUser.email));
+  const myRole = () => (preview ? preview.role : actualRole());
   const isAdmin = () => myRole() === "admin";
   const isTeacher = () => myRole() === "teacher";
   const isStudent = () => myRole() === "student";
@@ -419,6 +427,7 @@
   function logout() {
     localStorage.removeItem(AUTH_KEY);
     currentUser = null;
+    preview = null;
     if (window.google && google.accounts) google.accounts.id.disableAutoSelect();
     if (cloudEnabled) {
       // onAuth handles showing the login screen once sign-out completes.
@@ -441,6 +450,109 @@
     $$(".nav-item[data-view]").forEach((b) => {
       b.classList.toggle("hidden", !allowed.includes(b.dataset.view));
     });
+  }
+
+  function renderPreviewBanner() {
+    const el = $("#previewBanner");
+    if (!el) return;
+    if (!preview) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+    el.classList.remove("hidden");
+    const who = preview.role === "teacher" ? "Teacher" : "Student";
+    el.innerHTML = `<span>👁 Previewing as <b>${who}</b> — ${esc(preview.name || preview.email)} <span class="muted">(your admin access is unchanged)</span></span>
+      <button class="btn btn-sm btn-soft" id="exitPreview">Exit preview</button>`;
+    $("#exitPreview").onclick = exitPreview;
+  }
+
+  function applyPreview(p) {
+    if (!isRealAdmin()) return;
+    preview = p;
+    applyNavForRole();
+    renderPreviewBanner();
+    navigate(isStudent() ? "mine" : "classes");
+  }
+  function exitPreview() { applyPreview(null); }
+
+  function openPreviewModal() {
+    if (!isRealAdmin()) return;
+    const teachers = (ROLES.teachers || []);
+    // Students that actually have a record (so the preview shows something).
+    const seen = new Set();
+    const students = Store.all()
+      .filter((r) => r.email && !ADMIN_EMAILS.includes(lc(r.email)) && !TEACHER_EMAILS.includes(lc(r.email)))
+      .filter((r) => { const k = lc(r.email); if (seen.has(k)) return false; seen.add(k); return true; })
+      .map((r) => ({ email: r.email, name: r.fullName || r.email }));
+
+    const body = `
+      <p class="muted" style="margin-top:0">See the app exactly as a teacher or student would. This only changes your view — it never changes your admin permissions.</p>
+      <div class="field">
+        <span>Preview as a Teacher</span>
+        <select id="pvTeacher"><option value="">— choose a teacher —</option>
+          ${teachers.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}</select>
+      </div>
+      <div class="field" style="margin-top:10px">
+        <span>Preview as a Student</span>
+        <select id="pvStudent"><option value="">${students.length ? "— choose a student —" : "— no student records yet —"}</option>
+          ${students.map((s) => `<option value="${esc(s.email)}">${esc(s.name)} — ${esc(s.email)}</option>`).join("")}</select>
+      </div>
+      <p class="muted" style="margin-top:14px">No test data yet? Create a demo class with dummy students to try it out:</p>
+      <button type="button" class="btn btn-soft btn-sm" id="pvDemo">🧪 Create demo class + dummy students</button>`;
+
+    const m = modal({
+      title: "Preview as…",
+      body,
+      wide: true,
+      actions: [{ label: "Close", class: "btn-ghost" }],
+    });
+    const tSel = $("#pvTeacher", m.root);
+    const sSel = $("#pvStudent", m.root);
+    tSel.onchange = () => {
+      if (!tSel.value) return;
+      m.close();
+      applyPreview({ role: "teacher", email: tSel.value, name: tSel.value });
+    };
+    sSel.onchange = () => {
+      if (!sSel.value) return;
+      const stu = students.find((s) => lc(s.email) === lc(sSel.value));
+      m.close();
+      applyPreview({ role: "student", email: sSel.value, name: stu ? stu.name : sSel.value });
+    };
+    $("#pvDemo", m.root).onclick = () => { m.close(); seedDemoData(); };
+  }
+
+  // Create a clearly-labelled demo class + two dummy students so an admin can
+  // test the teacher/student views. Safe to delete afterwards (delete the class).
+  function seedDemoData() {
+    const teacher = (ROLES.teachers || [])[0] || myEmail();
+    let cls = Store.classesAll().find((c) => c.sectionCode === "DEMO");
+    if (!cls) {
+      cls = Store.classSave({
+        academicYear: currentAY(), term: currentTerm(),
+        course: "PATHFIT 1", sectionCode: "DEMO", teacherEmail: teacher,
+        scheduleDay: "Monday", scheduleTime: TIMES[0], gymWing: "Left",
+      });
+    }
+    const dummies = [
+      { fullName: "Demo Student A", email: "demo.studenta@ciit.edu.ph", studentNo: "DEMO-001", sex: "Female", birthday: "2006-05-12" },
+      { fullName: "Demo Student B", email: "demo.studentb@ciit.edu.ph", studentNo: "DEMO-002", sex: "Male", birthday: "2005-11-03" },
+    ];
+    const existing = new Set(studentsOfClass(cls).map((r) => lc(r.email)));
+    dummies.forEach((d) => {
+      if (existing.has(lc(d.email))) return;
+      const rec = Object.assign({
+        classId: cls.id, teacherEmail: cls.teacherEmail,
+        academicYear: cls.academicYear, term: cls.term,
+        course: cls.course, sectionCode: cls.sectionCode,
+        scheduleDay: cls.scheduleDay, scheduleTime: cls.scheduleTime, gymWing: cls.gymWing,
+        // A few sample readings so progress isn't 0%.
+        heightM: "1.60", weightKg: "52", rhr: "72", pushups: "18", plankTime: "01:00",
+      }, d);
+      computeDerived(rec);
+      rec.recordedBy = currentUser.email;
+      Store.save(rec);
+    });
+    toast("Demo class + dummy students created.", "ok");
+    navigate("classes");
+    openPreviewModal();
   }
 
   function enterApp() {
@@ -470,6 +582,13 @@
         badge.className = "storage-badge local";
       }
     }
+    preview = null;
+    const pvBtn = $("#previewBtn");
+    if (pvBtn) {
+      pvBtn.classList.toggle("hidden", !isRealAdmin());
+      pvBtn.onclick = openPreviewModal;
+    }
+    renderPreviewBanner();
     applyNavForRole();
     navigate(isStudent() ? "mine" : "classes");
   }

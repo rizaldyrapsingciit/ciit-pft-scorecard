@@ -143,6 +143,13 @@ body {
 .storage-badge.shared { color: #1a7f37; }
 .storage-badge.local { color: var(--ink-3); }
 
+.preview-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 14px 28px 0; padding: 10px 14px; border-radius: 10px;
+  background: #fff4d6; border: 1px solid #f0c65a; color: #6b4e00; font-size: 13px;
+}
+.preview-banner .muted { color: #8a7330; }
+
 .content { padding: 26px 28px 60px; }
 
 /* ---------------- Cards / grid ---------------- */

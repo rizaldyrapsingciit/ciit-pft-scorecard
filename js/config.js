@@ -41,6 +41,7 @@ window.PFT_CONFIG = {
     admins: [
       "kristine.dipalac@ciit.edu.ph",
       "jillan.macalintal@ciit.edu.ph",
+      "rizaldy.rapsing@ciit.edu.ph",
     ],
     teachers: [
       "nicole.lictaoa@ciit.edu.ph",
