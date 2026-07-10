@@ -10,6 +10,7 @@ window.Store = (function () {
   const KEY = "ciit_pft_records_v1";
   const ROSTER_KEY = "ciit_pft_roster_v1";
   const CLASS_KEY = "ciit_pft_classes_v1";
+  const SETTINGS_KEY = "ciit_pft_settings_v1";
 
   // Optional listener the app can register to mirror local changes to a shared
   // cloud database. It is only fired for changes made *on this device* — never
@@ -23,13 +24,14 @@ window.Store = (function () {
     }
   }
 
-  // Replace local records/classes with a snapshot received from the cloud,
-  // without re-broadcasting the change back out.
-  function applyRemote(records, classes) {
+  // Replace local records/classes/settings with a snapshot received from the
+  // cloud, without re-broadcasting the change back out.
+  function applyRemote(records, classes, settings) {
     applyingRemote = true;
     try {
       if (Array.isArray(records)) _write(records);
       if (Array.isArray(classes)) _writeClasses(classes);
+      if (settings && typeof settings === "object") _writeSettings(settings);
     } finally {
       applyingRemote = false;
     }
@@ -105,6 +107,24 @@ window.Store = (function () {
   function setRoster(students) {
     const data = { students: students || [], syncedAt: Date.now() };
     localStorage.setItem(ROSTER_KEY, JSON.stringify(data));
+    return data;
+  }
+
+  /* ---------------- Shared settings (e.g. teacher list) ---------------- */
+  function _writeSettings(obj) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(obj || {}));
+  }
+  function getSettings() {
+    try {
+      return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function setSettings(obj) {
+    const data = Object.assign({}, getSettings(), obj || {});
+    _writeSettings(data);
+    notify("settings", data);
     return data;
   }
 
@@ -242,6 +262,8 @@ window.Store = (function () {
     clearAll,
     getRoster,
     setRoster,
+    getSettings,
+    setSettings,
     classesAll,
     classGet,
     classSave,

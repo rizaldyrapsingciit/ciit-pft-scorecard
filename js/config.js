@@ -43,7 +43,11 @@ window.PFT_CONFIG = {
       "jillan.macalintal@ciit.edu.ph",
       "rizaldy.rapsing@ciit.edu.ph",
     ],
+    // Default PE teachers. Admins can add/remove teachers from inside the app
+    // (Classes → 👥 Teachers); that shared list takes over once saved.
     teachers: [
+      "kristine.dipalac@ciit.edu.ph",
+      "jillan.macalintal@ciit.edu.ph",
       "nicole.lictaoa@ciit.edu.ph",
       "noelle.dianzon@ciit.edu.ph",
       "julius.torrecarion@ciit.edu.ph",

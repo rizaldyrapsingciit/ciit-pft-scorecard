@@ -23,12 +23,20 @@
   const lc = (s) => String(s || "").trim().toLowerCase();
   const ROLES = (CFG.roles || {});
   const ADMIN_EMAILS = (ROLES.admins || []).map(lc);
-  const TEACHER_EMAILS = (ROLES.teachers || []).map(lc);
+
+  // Effective PE-teacher list: the admin-managed shared list if it exists,
+  // otherwise the defaults from config.js.
+  function getTeachers() {
+    const s = Store.getSettings();
+    if (s && Array.isArray(s.teachers)) return s.teachers;
+    return ROLES.teachers || [];
+  }
+  const teacherEmailsLc = () => getTeachers().map(lc);
 
   function roleOf(email) {
     const e = lc(email);
     if (ADMIN_EMAILS.includes(e)) return "admin";
-    if (TEACHER_EMAILS.includes(e)) return "teacher";
+    if (teacherEmailsLc().includes(e)) return "teacher";
     return "student";
   }
 
@@ -400,15 +408,19 @@
         email: user.email,
         picture: user.photoURL || "",
         via: "google",
-        role: roleOf(user.email),
+        role: "student",
       };
-      // Live-sync the shared database into local storage, then re-render.
-      // Teachers/students only receive the subset they're allowed to see.
-      Cloud.start(({ records, classes }) => {
-        Store.applyRemote(records, classes);
-        refresh();
-      }, { role: currentUser.role, email: currentUser.email });
-      enterApp();
+      // Load the shared teacher list FIRST so the role is decided correctly,
+      // then start the (role-scoped) live sync and enter the app.
+      Cloud.fetchSettings().then((settings) => {
+        Store.applyRemote(undefined, undefined, settings);
+        currentUser.role = roleOf(currentUser.email);
+        Cloud.start(({ records, classes, settings }) => {
+          Store.applyRemote(records, classes, settings);
+          refresh();
+        }, { role: currentUser.role, email: currentUser.email });
+        enterApp();
+      });
     });
   }
 
@@ -474,11 +486,11 @@
 
   function openPreviewModal() {
     if (!isRealAdmin()) return;
-    const teachers = (ROLES.teachers || []);
+    const teachers = getTeachers();
     // Students that actually have a record (so the preview shows something).
     const seen = new Set();
     const students = Store.all()
-      .filter((r) => r.email && !ADMIN_EMAILS.includes(lc(r.email)) && !TEACHER_EMAILS.includes(lc(r.email)))
+      .filter((r) => r.email && !ADMIN_EMAILS.includes(lc(r.email)) && !teacherEmailsLc().includes(lc(r.email)))
       .filter((r) => { const k = lc(r.email); if (seen.has(k)) return false; seen.add(k); return true; })
       .map((r) => ({ email: r.email, name: r.fullName || r.email }));
 
@@ -522,7 +534,7 @@
   // Create a clearly-labelled demo class + two dummy students so an admin can
   // test the teacher/student views. Safe to delete afterwards (delete the class).
   function seedDemoData() {
-    const teacher = (ROLES.teachers || [])[0] || myEmail();
+    const teacher = getTeachers()[0] || myEmail();
     let cls = Store.classesAll().find((c) => c.sectionCode === "DEMO");
     if (!cls) {
       cls = Store.classSave({
@@ -830,16 +842,20 @@
         admin ? "No classes yet" : "No classes assigned to you yet",
         admin ? "Create a class first, then add students into it."
               : "An admin will assign your classes. Check back soon.",
-        admin ? `<button class="btn btn-primary" id="newClass">＋ New class</button>` : ""
+        admin ? `<button class="btn btn-soft" id="mngTeachers">👥 Teachers</button>
+          <button class="btn btn-primary" id="newClass">＋ New class</button>` : ""
       );
       const nc = $("#newClass");
       if (nc) nc.onclick = () => openClassModal();
+      const mt = $("#mngTeachers");
+      if (mt) mt.onclick = openTeachersModal;
       return;
     }
     c.innerHTML = `
       <div class="toolbar no-print">
         <div class="left"><h3 style="margin:0">Your classes</h3></div>
-        <div class="right">${admin ? `<button class="btn btn-primary btn-sm" id="newClass">＋ New class</button>` : ""}</div>
+        <div class="right">${admin ? `<button class="btn btn-soft btn-sm" id="mngTeachers">👥 Teachers</button>
+          <button class="btn btn-primary btn-sm" id="newClass">＋ New class</button>` : ""}</div>
       </div>
       <div class="grid class-grid">
         ${classes.map((cls) => {
@@ -863,9 +879,59 @@
       </div>`;
     const nc = $("#newClass");
     if (nc) nc.onclick = () => openClassModal();
+    const mt = $("#mngTeachers");
+    if (mt) mt.onclick = openTeachersModal;
     $$("[data-open]", c).forEach((b) => b.onclick = () => navigate("class", b.dataset.open));
     $$("[data-edit]", c).forEach((b) => b.onclick = () => openClassModal(Store.classGet(b.dataset.edit)));
     $$("[data-del]", c).forEach((b) => b.onclick = () => confirmDeleteClass(Store.classGet(b.dataset.del)));
+  }
+
+  // Admin-only: manage which CIIT emails are PE teachers (shared with everyone).
+  function openTeachersModal() {
+    if (!isRealAdmin()) { toast("Only admins can manage teachers.", "err"); return; }
+    const domain = (CFG.allowedEmailDomains && CFG.allowedEmailDomains[0]) || "ciit.edu.ph";
+    const render = (m) => {
+      const list = getTeachers();
+      const listHTML = list.length
+        ? list.map((t) => `<label class="add-row">
+            <span class="ar-name">${esc(t)}</span>
+            <button type="button" class="btn btn-ghost btn-sm" data-remove="${esc(t)}">✕ Remove</button>
+          </label>`).join("")
+        : `<p class="muted" style="margin:6px 0">No teachers yet — add one below.</p>`;
+      $("#tmBody", m.root).innerHTML = `
+        <div class="add-list">${listHTML}</div>
+        <div class="name-picker" style="margin-top:12px">
+          <input id="tmNew" type="email" placeholder="teacher@${esc(domain)}" />
+          <button type="button" class="btn btn-primary btn-sm" id="tmAdd">＋ Add teacher</button>
+        </div>
+        <p class="muted" style="margin:10px 0 0">A newly added teacher must sign out and back in for their teacher access to take effect.</p>`;
+      $("#tmAdd", m.root).onclick = () => {
+        const email = lc($("#tmNew", m.root).value);
+        if (!email || !/^\S+@\S+\.\S+$/.test(email)) { toast("Enter a valid email.", "err"); return; }
+        if (CFG.allowedEmailDomains && CFG.allowedEmailDomains.length &&
+            !CFG.allowedEmailDomains.some((d) => email.endsWith("@" + lc(d)))) {
+          toast(`Teacher email must be @${domain}.`, "err"); return;
+        }
+        const cur = getTeachers().map(lc);
+        if (cur.includes(email)) { toast("That teacher is already listed.", "err"); return; }
+        Store.setSettings({ teachers: getTeachers().concat(email) });
+        toast("Teacher added.", "ok");
+        render(m);
+      };
+      $$("[data-remove]", m.root).forEach((b) => b.onclick = () => {
+        const email = b.dataset.remove;
+        Store.setSettings({ teachers: getTeachers().filter((t) => lc(t) !== lc(email)) });
+        toast("Teacher removed.", "ok");
+        render(m);
+      });
+    };
+    const m = modal({
+      title: "PE Teachers",
+      body: `<p class="muted" style="margin-top:0">These CIIT accounts can be assigned to classes and will get teacher access. Shared with all admins.</p><div id="tmBody"></div>`,
+      wide: true,
+      actions: [{ label: "Done", class: "btn-primary" }],
+    });
+    render(m);
   }
 
   function confirmDeleteClass(cls) {
@@ -889,7 +955,7 @@
 
   const teacherOptionsHTML = (sel) =>
     ['<option value="">— assign a teacher —</option>']
-      .concat((ROLES.teachers || []).map((t) =>
+      .concat(getTeachers().map((t) =>
         `<option value="${esc(t)}" ${lc(t) === lc(sel) ? "selected" : ""}>${esc(t)}</option>`))
       .join("");
 
@@ -2326,6 +2392,7 @@
         else if (type === "record:remove") Cloud.removeRecord(payload);
         else if (type === "class") Cloud.pushClass(payload);
         else if (type === "class:remove") Cloud.removeClass(payload);
+        else if (type === "settings") Cloud.pushSettings(payload);
       });
       initCloudAuth();
     } else {

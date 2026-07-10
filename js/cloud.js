@@ -19,6 +19,8 @@ window.Cloud = (function () {
   let unsub = [];
   let latestRecords = [];
   let latestClasses = [];
+  let latestSettings = {};
+  const SETTINGS_DOC = "roles";
 
   function isEnabled() {
     return enabled;
@@ -74,7 +76,21 @@ window.Cloud = (function () {
   }
 
   function emit() {
-    if (dataCb) dataCb({ records: latestRecords, classes: latestClasses });
+    if (dataCb) dataCb({ records: latestRecords, classes: latestClasses, settings: latestSettings });
+  }
+
+  // Read the shared settings doc once (used at login, before role is known).
+  function fetchSettings() {
+    if (!enabled) return Promise.resolve({});
+    return db.collection("settings").doc(SETTINGS_DOC).get()
+      .then((d) => (d.exists ? d.data() : {}))
+      .catch((e) => { console.error("[Cloud] fetch settings:", e); return {}; });
+  }
+
+  function pushSettings(obj) {
+    if (!enabled || !obj) return;
+    db.collection("settings").doc(SETTINGS_DOC).set(clean(obj), { merge: true })
+      .catch((e) => console.error("[Cloud] save settings:", e));
   }
 
   // Begin live sync. `cb` is called with {records, classes} on every change.
@@ -110,6 +126,12 @@ window.Cloud = (function () {
     } else {
       latestClasses = [];
     }
+
+    // Shared settings (teacher list) — readable by everyone signed in.
+    unsub.push(db.collection("settings").doc(SETTINGS_DOC).onSnapshot(
+      (snap) => { latestSettings = snap.exists ? snap.data() : {}; emit(); },
+      (err) => console.error("[Cloud] settings sync error:", err)
+    ));
   }
 
   function stop() {
@@ -142,6 +164,8 @@ window.Cloud = (function () {
     signOut,
     start,
     stop,
+    fetchSettings,
+    pushSettings,
     pushRecord,
     removeRecord,
     pushClass,

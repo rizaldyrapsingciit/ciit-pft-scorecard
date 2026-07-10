@@ -31,6 +31,13 @@ service cloud.firestore {
     }
     function isAdmin() { return isCiit() && email() in admins(); }
 
+    // Shared settings (e.g. the admin-managed PE teacher list). Everyone signed
+    // in needs to read it (to know who is a teacher); only admins may change it.
+    match /settings/{id} {
+      allow read:  if isCiit();
+      allow write: if isAdmin();
+    }
+
     match /classes/{id} {
       allow read:  if isAdmin() || (isCiit() && resource.data.teacherEmail == email());
       allow write: if isAdmin();
