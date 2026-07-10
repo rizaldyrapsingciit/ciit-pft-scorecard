@@ -1,24 +1,56 @@
 rules_version = '2';
 
 // CIIT PFT Scorecard — Firestore security rules
-// Only signed-in users whose email ends with an allowed CIIT domain may read
-// or write the shared classes and scorecards. Copy these into the Firebase
-// console → Firestore Database → Rules, then Publish.
+//
+// Three roles, matched by the signed-in Google email:
+//   • Admin   — full access (create/edit/delete everything).
+//   • Teacher — reads/updates only records in classes assigned to them, and
+//               reads only their assigned classes. Cannot create/delete.
+//   • Student — reads/updates only their own record. Cannot create/delete.
+// Teachers and students may update readings but may NOT change the ownership
+// fields (email / teacherEmail / classId).
+//
+// IMPORTANT: keep the admins() list below in sync with roles.admins in
+// js/config.js. (Teachers are recognised via each doc's teacherEmail field, so
+// they don't need to be listed here.)
+//
+// Paste this into Firebase console → Firestore Database → Rules → Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isCiit() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email.matches('.*@ciit[.]edu[.]ph$');
+    function email()    { return request.auth != null ? request.auth.token.email : ''; }
+    function verified() { return request.auth != null && request.auth.token.email_verified == true; }
+    function isCiit()   { return verified() && email().matches('.*@ciit[.]edu[.]ph$'); }
+
+    function admins() {
+      return [
+        'kristine.dipalac@ciit.edu.ph',
+        'jillan.macalintal@ciit.edu.ph'
+      ];
+    }
+    function isAdmin() { return isCiit() && email() in admins(); }
+
+    match /classes/{id} {
+      allow read:  if isAdmin() || (isCiit() && resource.data.teacherEmail == email());
+      allow write: if isAdmin();
     }
 
     match /records/{id} {
-      allow read, write: if isCiit();
-    }
+      allow read: if isAdmin()
+        || (isCiit() && resource.data.teacherEmail == email())
+        || (isCiit() && resource.data.email == email());
 
-    match /classes/{id} {
-      allow read, write: if isCiit();
+      allow create, delete: if isAdmin();
+
+      // The owning teacher or the student themselves may update readings,
+      // but cannot change who the record belongs to.
+      allow update: if isAdmin() || (
+        isCiit()
+        && (resource.data.teacherEmail == email() || resource.data.email == email())
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.teacherEmail == resource.data.teacherEmail
+        && request.resource.data.classId == resource.data.classId
+      );
     }
   }
 }

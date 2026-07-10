@@ -17,6 +17,51 @@
   const WINGS = ["Left", "Right"];
   const TERMS = ["1", "2", "3"];
 
+  /* ============================================================
+   * Roles & access
+   * ========================================================== */
+  const lc = (s) => String(s || "").trim().toLowerCase();
+  const ROLES = (CFG.roles || {});
+  const ADMIN_EMAILS = (ROLES.admins || []).map(lc);
+  const TEACHER_EMAILS = (ROLES.teachers || []).map(lc);
+
+  function roleOf(email) {
+    const e = lc(email);
+    if (ADMIN_EMAILS.includes(e)) return "admin";
+    if (TEACHER_EMAILS.includes(e)) return "teacher";
+    return "student";
+  }
+  const myEmail = () => lc(currentUser && currentUser.email);
+  const myRole = () => (currentUser && currentUser.role) || "student";
+  const isAdmin = () => myRole() === "admin";
+  const isTeacher = () => myRole() === "teacher";
+  const isStudent = () => myRole() === "student";
+
+  // Records this user is allowed to see.
+  function visibleRecords() {
+    const all = Store.all();
+    if (isAdmin()) return all;
+    if (isTeacher()) return all.filter((r) => lc(r.teacherEmail) === myEmail());
+    return all.filter((r) => lc(r.email) === myEmail()); // student
+  }
+  // Classes this user is allowed to see.
+  function visibleClasses() {
+    const all = Store.classesAll();
+    if (isAdmin()) return all;
+    if (isTeacher()) return all.filter((c) => lc(c.teacherEmail) === myEmail());
+    return [];
+  }
+  function canAccessRecord(r) {
+    if (!r) return false;
+    if (isAdmin()) return true;
+    if (isTeacher()) return lc(r.teacherEmail) === myEmail();
+    return lc(r.email) === myEmail();
+  }
+  function canAccessClass(cls) {
+    if (!cls) return false;
+    return isAdmin() || (isTeacher() && lc(cls.teacherEmail) === myEmail());
+  }
+
   // CIIT runs on trimesters: Term 1 starts August, Term 2 December,
   // Term 3 April. The academic year therefore starts in August, so
   // Jan–Jul still counts as the previous year's AY.
@@ -347,12 +392,14 @@
         email: user.email,
         picture: user.photoURL || "",
         via: "google",
+        role: roleOf(user.email),
       };
       // Live-sync the shared database into local storage, then re-render.
+      // Teachers/students only receive the subset they're allowed to see.
       Cloud.start(({ records, classes }) => {
         Store.applyRemote(records, classes);
         refresh();
-      });
+      }, { role: currentUser.role, email: currentUser.email });
       enterApp();
     });
   }
@@ -382,7 +429,23 @@
     $("#loginScreen").classList.remove("hidden");
   }
 
+  const ROLE_LABEL = { admin: "Admin", teacher: "Teacher", student: "Student" };
+
+  // Show/hide nav items and pick the right landing view for the role.
+  function applyNavForRole() {
+    const allowed = {
+      admin: ["classes", "dashboard", "manage", "reports"],
+      teacher: ["classes", "dashboard", "reports"],
+      student: [],
+    }[myRole()] || [];
+    $$(".nav-item[data-view]").forEach((b) => {
+      b.classList.toggle("hidden", !allowed.includes(b.dataset.view));
+    });
+  }
+
   function enterApp() {
+    // Roles may have changed in config since last session — always recompute.
+    currentUser.role = roleOf(currentUser.email);
     $("#loginScreen").classList.add("hidden");
     $("#app").classList.remove("hidden");
     $("#userName").textContent = currentUser.name;
@@ -396,17 +459,19 @@
     }
     const badge = $("#storageBadge");
     if (badge) {
+      const roleTxt = ROLE_LABEL[myRole()] || "Student";
       if (cloudEnabled) {
-        badge.textContent = "● Shared database";
-        badge.title = "Signed in with Google. Classes and scorecards are shared with all CIIT teachers.";
+        badge.textContent = `● ${roleTxt} • Shared database`;
+        badge.title = "Signed in with Google. Data is shared across CIIT accounts per your role.";
         badge.className = "storage-badge shared";
       } else {
-        badge.textContent = "● This device only";
+        badge.textContent = `● ${roleTxt} • This device only`;
         badge.title = "Data is saved privately in this browser. Use Manage Data → Backup to move it.";
         badge.className = "storage-badge local";
       }
     }
-    navigate("classes");
+    applyNavForRole();
+    navigate(isStudent() ? "mine" : "classes");
   }
 
   /* ============================================================
@@ -560,7 +625,18 @@
     entry: ["Scorecard", "Add or edit a student's PFT results"],
     manage: ["Manage Data", "Search, edit, back up and export records"],
     reports: ["Reports", "Printable scorecards and class summaries"],
+    mine: ["My Scorecard", "View and update your own fitness readings"],
   };
+
+  // Views each role is allowed to open directly.
+  function canView(view) {
+    const perRole = {
+      admin: ["classes", "class", "dashboard", "entry", "manage", "reports", "mine"],
+      teacher: ["classes", "class", "dashboard", "entry", "reports", "mine"],
+      student: ["mine", "entry", "reports"],
+    };
+    return (perRole[myRole()] || []).includes(view);
+  }
 
   let currentView = "classes";
   let currentArg = null;
@@ -573,9 +649,11 @@
   }
 
   function navigate(view, arg) {
+    // Keep users out of views their role can't use.
+    if (!canView(view)) view = isStudent() ? "mine" : "classes";
     currentView = view;
     currentArg = arg;
-    const navKey = { class: "classes", entry: "classes" }[view] || view;
+    const navKey = { class: "classes", entry: "classes", mine: "" }[view] ?? view;
     $$(".nav-item[data-view]").forEach((b) =>
       b.classList.toggle("active", b.dataset.view === navKey));
     $("#pageTitle").textContent = TITLES[view][0];
@@ -589,6 +667,7 @@
     else if (view === "entry") renderEntry(c, arg);
     else if (view === "manage") renderManage(c);
     else if (view === "reports") renderReports(c, arg);
+    else if (view === "mine") renderStudentHome(c);
   }
 
   /* ============================================================
@@ -625,20 +704,23 @@
   }
 
   function renderClasses(c) {
-    const classes = Store.classesAll();
+    const classes = visibleClasses();
+    const admin = isAdmin();
     if (!classes.length) {
       c.innerHTML = emptyState(
-        "No classes yet",
-        "Create a class first, then add students into it.",
-        `<button class="btn btn-primary" id="newClass">＋ New class</button>`
+        admin ? "No classes yet" : "No classes assigned to you yet",
+        admin ? "Create a class first, then add students into it."
+              : "An admin will assign your classes. Check back soon.",
+        admin ? `<button class="btn btn-primary" id="newClass">＋ New class</button>` : ""
       );
-      $("#newClass").onclick = () => openClassModal();
+      const nc = $("#newClass");
+      if (nc) nc.onclick = () => openClassModal();
       return;
     }
     c.innerHTML = `
       <div class="toolbar no-print">
         <div class="left"><h3 style="margin:0">Your classes</h3></div>
-        <div class="right"><button class="btn btn-primary btn-sm" id="newClass">＋ New class</button></div>
+        <div class="right">${admin ? `<button class="btn btn-primary btn-sm" id="newClass">＋ New class</button>` : ""}</div>
       </div>
       <div class="grid class-grid">
         ${classes.map((cls) => {
@@ -653,14 +735,15 @@
               <div class="cc-meta muted">${esc(classSchedule(cls) || "No schedule set")}</div>
             </button>
             <div class="cc-actions">
-              <button class="btn btn-soft btn-sm" data-edit="${cls.id}">Edit</button>
-              <button class="btn btn-ghost btn-sm" data-del="${cls.id}">Delete</button>
+              ${admin ? `<button class="btn btn-soft btn-sm" data-edit="${cls.id}">Edit</button>
+              <button class="btn btn-ghost btn-sm" data-del="${cls.id}">Delete</button>` : ""}
               <button class="btn btn-primary btn-sm" data-open="${cls.id}">Open →</button>
             </div>
           </div>`;
         }).join("")}
       </div>`;
-    $("#newClass").onclick = () => openClassModal();
+    const nc = $("#newClass");
+    if (nc) nc.onclick = () => openClassModal();
     $$("[data-open]", c).forEach((b) => b.onclick = () => navigate("class", b.dataset.open));
     $$("[data-edit]", c).forEach((b) => b.onclick = () => openClassModal(Store.classGet(b.dataset.edit)));
     $$("[data-del]", c).forEach((b) => b.onclick = () => confirmDeleteClass(Store.classGet(b.dataset.del)));
@@ -668,6 +751,7 @@
 
   function confirmDeleteClass(cls) {
     if (!cls) return;
+    if (!isAdmin()) { toast("Only admins can delete classes.", "err"); return; }
     const kids = studentsOfClass(cls);
     modal({
       title: "Delete class?",
@@ -684,7 +768,14 @@
     });
   }
 
+  const teacherOptionsHTML = (sel) =>
+    ['<option value="">— assign a teacher —</option>']
+      .concat((ROLES.teachers || []).map((t) =>
+        `<option value="${esc(t)}" ${lc(t) === lc(sel) ? "selected" : ""}>${esc(t)}</option>`))
+      .join("");
+
   function openClassModal(cls) {
+    if (!isAdmin()) { toast("Only admins can create or edit classes.", "err"); return; }
     const editing = cls || null;
     const ay = editing ? editing.academicYear : currentAY();
     const term = editing ? editing.term : currentTerm();
@@ -694,6 +785,7 @@
         <label class="field"><span>Term</span><select id="cfTerm">${termOptionsHTML(term)}</select></label>
         <label class="field"><span>PE Course</span><select id="cfCourse">${optionList(COURSES, editing && editing.course)}</select></label>
         <label class="field"><span>Section Code</span><input id="cfSection" value="${esc(editing ? editing.sectionCode : "")}" placeholder="e.g. 101" /></label>
+        <label class="field"><span>Assigned Teacher</span><select id="cfTeacher">${teacherOptionsHTML(editing && editing.teacherEmail)}</select></label>
         <label class="field"><span>PE Schedule — Day</span><select id="cfDay">${optionList(DAYS, editing && editing.scheduleDay)}</select></label>
         <label class="field"><span>PE Schedule — Time</span><select id="cfTime">${optionList(TIMES, editing && editing.scheduleTime)}</select></label>
         <label class="field"><span>Gym Wing (7th Floor)</span><select id="cfWing">${optionList(WINGS, editing && editing.gymWing)}</select></label>
@@ -707,14 +799,17 @@
         { label: editing ? "Save class" : "Create class", class: "btn-primary", onClick: (back) => {
           const cCourse = $("#cfCourse", back).value;
           const cSection = $("#cfSection", back).value.trim();
+          const cTeacher = $("#cfTeacher", back).value;
           if (!cCourse) { toast("Please choose the PE course.", "err"); return false; }
           if (!cSection) { toast("Please enter the section code.", "err"); return false; }
+          if (!cTeacher) { toast("Please assign a teacher to this class.", "err"); return false; }
           const rec = {
             id: editing ? editing.id : undefined,
             academicYear: $("#cfAY", back).value,
             term: $("#cfTerm", back).value,
             course: cCourse,
             sectionCode: cSection,
+            teacherEmail: cTeacher,
             scheduleDay: $("#cfDay", back).value,
             scheduleTime: $("#cfTime", back).value,
             gymWing: $("#cfWing", back).value,
@@ -725,6 +820,7 @@
             r.classId = saved.id;
             r.academicYear = saved.academicYear; r.term = saved.term;
             r.course = saved.course; r.sectionCode = saved.sectionCode;
+            r.teacherEmail = saved.teacherEmail;
             r.scheduleDay = saved.scheduleDay; r.scheduleTime = saved.scheduleTime; r.gymWing = saved.gymWing;
             computeDerived(r);
             Store.save(r);
@@ -739,6 +835,8 @@
   function renderClassDetail(c, classId) {
     const cls = Store.classGet(classId);
     if (!cls) return navigate("classes");
+    if (!canAccessClass(cls)) { toast("You don't have access to that class.", "err"); return navigate("classes"); }
+    const admin = isAdmin();
     $("#pageTitle").textContent = classLabel(cls);
     $("#pageSub").textContent = `${cls.academicYear || ""} • Term ${cls.term || ""}`;
     const students = studentsOfClass(cls);
@@ -747,29 +845,34 @@
       <div class="toolbar no-print">
         <div class="left"><button class="btn btn-ghost btn-sm" id="backClasses">← All classes</button></div>
         <div class="right">
-          <button class="btn btn-soft btn-sm" id="editClass">✎ Edit class</button>
+          ${admin ? `<button class="btn btn-soft btn-sm" id="editClass">✎ Edit class</button>
           <button class="btn btn-ghost btn-sm" id="delClass">Delete class</button>
-          <button class="btn btn-primary btn-sm" id="addStudent">＋ Add student</button>
+          <button class="btn btn-primary btn-sm" id="addStudent">＋ Add student</button>` : ""}
         </div>
       </div>
       <div class="card class-banner">
         <div class="cb-title"><span class="pill">Class</span> <strong>${esc(classLabel(cls))}</strong></div>
         <div class="cb-meta">${esc(cls.academicYear || "")} • Term ${esc(cls.term || "")} • ${esc(classSchedule(cls) || "No schedule set")}</div>
+        ${cls.teacherEmail ? `<div class="cb-meta muted">Teacher: ${esc(cls.teacherEmail)}</div>` : ""}
       </div>
       <div id="classStudents"></div>`;
     $("#backClasses").onclick = () => navigate("classes");
-    $("#editClass").onclick = () => openClassModal(cls);
-    $("#delClass").onclick = () => confirmDeleteClass(cls);
-    $("#addStudent").onclick = () => openAddStudentModal(cls);
+    if (admin) {
+      $("#editClass").onclick = () => openClassModal(cls);
+      $("#delClass").onclick = () => confirmDeleteClass(cls);
+      $("#addStudent").onclick = () => openAddStudentModal(cls);
+    }
 
     const host = $("#classStudents");
     if (!students.length) {
       host.innerHTML = emptyState(
         "No students yet",
-        "Click “Add student” to pick students from your Google Sheet list.",
-        `<button class="btn btn-primary" id="addStudent2">＋ Add student</button>`
+        admin ? "Click “Add student” to pick students from your Google Sheet list."
+              : "No students have been added to this class yet.",
+        admin ? `<button class="btn btn-primary" id="addStudent2">＋ Add student</button>` : ""
       );
-      $("#addStudent2").onclick = () => openAddStudentModal(cls);
+      const a2 = $("#addStudent2");
+      if (a2) a2.onclick = () => openAddStudentModal(cls);
       return;
     }
     host.innerHTML = `
@@ -787,9 +890,9 @@
               <td>${bmiBadge(r.bmiClass)}</td>
               <td><div class="prog"><span style="width:${p}%"></span></div><small class="muted">${p}%</small></td>
               <td class="actions">
-                <button class="btn btn-soft btn-sm" data-edit="${r.id}">Edit</button>
+                <button class="btn btn-soft btn-sm" data-edit="${r.id}">${admin ? "Edit" : "Edit readings"}</button>
                 <button class="btn btn-ghost btn-sm" data-report="${r.id}">Report</button>
-                <button class="btn btn-ghost btn-sm" data-remove="${r.id}">Remove</button>
+                ${admin ? `<button class="btn btn-ghost btn-sm" data-remove="${r.id}">Remove</button>` : ""}
               </td>
             </tr>`;
           }).join("")}
@@ -803,6 +906,7 @@
 
   function removeStudentFromClass(rec, cls) {
     if (!rec) return;
+    if (!isAdmin()) { toast("Only admins can remove students.", "err"); return; }
     const doRemove = () => {
       Store.remove(rec.id);
       toast("Student removed from class.", "ok");
@@ -820,6 +924,7 @@
   }
 
   function openAddStudentModal(cls) {
+    if (!isAdmin()) { toast("Only admins can add students.", "err"); return; }
     const roster = Store.getRoster().students;
     const existing = new Set(studentsOfClass(cls).map((r) => (r.email || r.fullName || "").toLowerCase()));
     const available = roster.filter((s) => !existing.has((s.email || s.fullName || "").toLowerCase()));
@@ -858,6 +963,7 @@
             const s = available[i];
             const rec = {
               classId: cls.id,
+              teacherEmail: cls.teacherEmail || "",
               academicYear: cls.academicYear, term: cls.term,
               course: cls.course, sectionCode: cls.sectionCode,
               scheduleDay: cls.scheduleDay, scheduleTime: cls.scheduleTime, gymWing: cls.gymWing,
@@ -896,10 +1002,55 @@
   }
 
   /* ============================================================
+   * Student home (their own scorecards only)
+   * ========================================================== */
+  function renderStudentHome(c) {
+    const mine = visibleRecords().slice().sort(periodOrder);
+    if (!mine.length) {
+      c.innerHTML = emptyState(
+        "No scorecard yet",
+        "Your teacher hasn't added you to a class yet. Once they do, your scorecard will appear here.",
+        ""
+      );
+      return;
+    }
+    c.innerHTML = `
+      <div class="toolbar no-print">
+        <div class="left"><h3 style="margin:0">My scorecards</h3></div>
+        <div class="right">${mine.length > 1 ? `<button class="btn btn-soft btn-sm" id="myProgress">📈 My progress</button>` : ""}</div>
+      </div>
+      <div class="grid class-grid">
+        ${mine.map((r) => {
+          const p = recordProgress(r);
+          return `<div class="card class-card">
+            <button type="button" class="cc-open" data-open="${r.id}">
+              <div class="cc-top">
+                <span class="cc-title">${esc(classLabel({ course: r.course, sectionCode: r.sectionCode }))}</span>
+                <span class="badge brandbadge">${r.bmi != null ? "BMI " + r.bmi : "—"}</span>
+              </div>
+              <div class="cc-meta">${esc(r.academicYear || "")} • Term ${esc(r.term || "")}</div>
+              <div class="cc-meta muted">${esc(classSchedule(r) || "No schedule set")}</div>
+              <div class="prog" style="margin-top:8px"><span style="width:${p}%"></span></div>
+              <small class="muted">${p}% complete</small>
+            </button>
+            <div class="cc-actions">
+              <button class="btn btn-ghost btn-sm" data-report="${r.id}">Report</button>
+              <button class="btn btn-primary btn-sm" data-open="${r.id}">Update readings →</button>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>`;
+    const mp = $("#myProgress");
+    if (mp) mp.onclick = () => navigate("reports", mine[0].id);
+    $$("[data-open]", c).forEach((b) => b.onclick = () => navigate("entry", b.dataset.open));
+    $$("[data-report]", c).forEach((b) => b.onclick = () => navigate("reports", b.dataset.report));
+  }
+
+  /* ============================================================
    * Dashboard
    * ========================================================== */
   function renderDashboard(c) {
-    const rows = Store.all();
+    const rows = visibleRecords();
     const total = rows.length;
     const withBMI = rows.filter((r) => r.bmi != null);
     const avgBMI = withBMI.length
@@ -1150,11 +1301,20 @@
 
   function renderEntry(c, id) {
     const editing = id ? Store.get(id) : null;
+    // Only admins may create brand-new records here; others always edit an
+    // existing one they own.
+    if (!editing && !isAdmin()) { toast("Your scorecard is created by your teacher.", "err"); return navigate(isStudent() ? "mine" : "classes"); }
+    if (editing && !canAccessRecord(editing)) { toast("You don't have access to that record.", "err"); return navigate(isStudent() ? "mine" : "classes"); }
     const r = editing || {};
     const ayValue = r.academicYear || currentAY();
     const termValue = r.term || currentTerm();
     const lockClass = !!r.classId;
-    const dis = lockClass ? "disabled" : "";
+    // Class/schedule fields: only an admin can change them (and only when not
+    // already managed by a class). Student identity fields: admin only.
+    const canInfo = isAdmin();
+    const dis = (lockClass || !canInfo) ? "disabled" : "";
+    const infoDis = canInfo ? "" : "disabled";
+    const showPicker = canInfo && !lockClass;
 
     c.innerHTML = `
       <form id="scForm">
@@ -1182,21 +1342,21 @@
 
           <div class="form-section">
             <div class="section-head"><span class="pill">Student</span><h3>Student</h3>
-              <span class="desc">${lockClass ? "" : "Pick a name — the rest fills in from the sheet"}</span></div>
+              <span class="desc">${canInfo ? (lockClass ? "" : "Pick a name — the rest fills in from the sheet") : "Personal info is read-only — you can update the readings"}</span></div>
             <div class="field-grid">
               <label class="field name-field">
                 <span>Full Name</span>
                 <div class="name-picker">
                   <select data-k="fullName" id="nameSelect" ${dis}>${nameOptionsHTML(r.fullName)}</select>
-                  ${lockClass ? "" : `<button type="button" class="btn btn-soft btn-sm" id="pullRosterBtn">⟳ Pull from Google Sheet</button>`}
+                  ${showPicker ? `<button type="button" class="btn btn-soft btn-sm" id="pullRosterBtn">⟳ Pull from Google Sheet</button>` : ""}
                 </div>
-                ${lockClass ? "" : `<small class="muted" id="rosterStatus">${rosterStatusHTML()}</small>`}
+                ${showPicker ? `<small class="muted" id="rosterStatus">${rosterStatusHTML()}</small>` : ""}
               </label>
-              <label class="field"><span>Student No.</span><input data-k="studentNo" placeholder="e.g. 17-24-5072" /></label>
-              <label class="field"><span>CIIT Email</span><input type="email" data-k="email" placeholder="student@ciit.edu.ph" /></label>
-              <label class="field"><span>Sex</span><select data-k="sex"><option value="">—</option><option>Male</option><option>Female</option></select></label>
-              <label class="field"><span>Birthday</span><input type="date" data-k="birthday" /></label>
-              <label class="field"><span>Age</span><input type="number" data-k="age" placeholder="e.g. 18" /></label>
+              <label class="field"><span>Student No.</span><input data-k="studentNo" placeholder="e.g. 17-24-5072" ${infoDis} /></label>
+              <label class="field"><span>CIIT Email</span><input type="email" data-k="email" placeholder="student@ciit.edu.ph" ${infoDis} /></label>
+              <label class="field"><span>Sex</span><select data-k="sex" ${infoDis}><option value="">—</option><option>Male</option><option>Female</option></select></label>
+              <label class="field"><span>Birthday</span><input type="date" data-k="birthday" ${infoDis} /></label>
+              <label class="field"><span>Age</span><input type="number" data-k="age" placeholder="e.g. 18" ${infoDis} /></label>
             </div>
           </div>
         </div>
@@ -1229,7 +1389,7 @@
         </div>
 
         <div class="form-actions no-print">
-          ${editing ? `<button type="button" class="btn btn-danger" id="delBtn">Delete</button>` : ""}
+          ${editing && isAdmin() ? `<button type="button" class="btn btn-danger" id="delBtn">Delete</button>` : ""}
           <button type="button" class="btn btn-ghost" id="cancelBtn">Cancel</button>
           <button type="submit" class="btn btn-primary" id="saveBtn">💾 ${editing ? "Save changes" : "Save scorecard"}</button>
         </div>
@@ -1366,23 +1526,29 @@
       if (el) el.addEventListener("change", applyClassDefaults);
     });
 
-    $("#cancelBtn").onclick = () => {
-      if (editing && editing.classId) navigate("class", editing.classId);
-      else navigate(editing ? "manage" : "classes");
+    const backView = () => {
+      if (isStudent()) return navigate("mine");
+      if (editing && editing.classId) return navigate("class", editing.classId);
+      return navigate(editing ? "manage" : "classes");
     };
-    if (editing) $("#delBtn").onclick = () => confirmDelete(editing);
+    $("#cancelBtn").onclick = backView;
+    const delBtn = $("#delBtn");
+    if (delBtn) delBtn.onclick = () => confirmDelete(editing);
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      const rec = collect(form);
+      // Start from the existing record so ownership/link fields (classId,
+      // teacherEmail, recordedBy, timestamps) are never lost on save.
+      const rec = editing ? Object.assign({}, editing, collect(form)) : collect(form);
       if (editing) rec.id = editing.id;
       if (!rec.fullName || !rec.fullName.trim()) return toast("Please enter the student's name.", "err");
       if (!rec.course) return toast("Please choose the PE course (PATHFIT 1–4).", "err");
       computeDerived(rec);
-      rec.recordedBy = currentUser.email;
+      if (!rec.recordedBy) rec.recordedBy = currentUser.email;
       const saved = Store.save(rec);
       toast("Scorecard saved.", "ok");
-      if (saved.classId) navigate("class", saved.classId);
+      if (isStudent()) navigate("mine");
+      else if (saved.classId) navigate("class", saved.classId);
       else navigate("reports", saved.id);
     });
   }
@@ -1408,7 +1574,8 @@
    * Manage data
    * ========================================================== */
   function renderManage(c) {
-    const sections = Array.from(new Set(Store.all().map((r) => r.sectionCode).filter(Boolean))).sort();
+    if (!isAdmin()) { toast("Only admins can open Manage Data.", "err"); return navigate("classes"); }
+    const sections = Array.from(new Set(visibleRecords().map((r) => r.sectionCode).filter(Boolean))).sort();
     c.innerHTML = `
       <div class="toolbar no-print">
         <div class="left">
@@ -1550,12 +1717,14 @@
    * Reports
    * ========================================================== */
   function renderReports(c, id) {
-    const rows = Store.all();
+    const rows = visibleRecords();
     if (!rows.length) {
       c.innerHTML = emptyState("No reports yet", "Add scorecards first to generate reports.", "");
       return;
     }
+    // Never let someone open a report for a record they can't access.
     let selected = id ? Store.get(id) : rows[0];
+    if (selected && !canAccessRecord(selected)) selected = rows[0];
 
     c.innerHTML = `
       <div class="report-head no-print">
@@ -1583,7 +1752,7 @@
       $("#repSelect").style.display = mode === "individual" ? "" : "none";
       if (mode === "individual") body.innerHTML = scoreCardHTML(selected || rows[0]);
       else if (mode === "progress") renderProgressReport(body, selected || rows[0]);
-      else if (mode === "summary") body.innerHTML = classSummaryHTML(Store.all());
+      else if (mode === "summary") body.innerHTML = classSummaryHTML(visibleRecords());
       else renderCustomReport(body);
     };
 
@@ -1614,8 +1783,8 @@
     const state = { course: "", section: "", sex: "", bmi: "", sortKey: "fullName", sortDir: "asc" };
 
     const draw = () => {
-      const sections = Array.from(new Set(Store.all().map((r) => r.sectionCode).filter(Boolean))).sort();
-      let rows = Store.all().filter((r) => {
+      const sections = Array.from(new Set(visibleRecords().map((r) => r.sectionCode).filter(Boolean))).sort();
+      let rows = visibleRecords().filter((r) => {
         if (state.course && r.course !== state.course) return false;
         if (state.section && r.sectionCode !== state.section) return false;
         if (state.sex && !(r.sex || "").toLowerCase().startsWith(state.sex[0].toLowerCase())) return false;
@@ -1806,7 +1975,7 @@
 
   function distinctStudents() {
     const map = new Map();
-    Store.all().forEach((r) => {
+    visibleRecords().forEach((r) => {
       const k = studentKey(r);
       if (!k) return;
       if (!map.has(k)) map.set(k, { key: k, name: r.fullName, studentNo: r.studentNo, email: r.email, records: [] });

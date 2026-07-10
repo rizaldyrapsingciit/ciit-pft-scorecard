@@ -176,6 +176,63 @@ breaks until you finish the steps below.
 
 ---
 
+## User roles (Admin / Teacher / Student)
+
+When the shared login is on, every signed-in account gets one of three roles,
+decided by their email:
+
+| Role | Who | What they can do |
+| --- | --- | --- |
+| **Admin** | Emails listed in `roles.admins` | Everything: create/edit/delete classes, assign teachers, add/remove students, edit personal info **and** readings, Manage Data, backups, roster pull. |
+| **Teacher** | Emails listed in `roles.teachers` | See **only their assigned classes**; edit students' **fitness readings** (not personal info). Cannot create classes or add/remove students. |
+| **Student** | Any other `@ciit.edu.ph` account | See and edit **only their own** scorecard readings (not their personal info). |
+
+**How a teacher gets a class:** an Admin creates the class and picks the
+teacher from the **Assigned Teacher** dropdown. That teacher then sees the class
+when they sign in. A student's scorecard is created when an Admin adds them to a
+class; the student sees it after signing in with the same email that's on the
+class list.
+
+### Where to set the lists
+
+Edit **`js/config.js`** → `roles`:
+
+```js
+roles: {
+  admins: ["kristine.dipalac@ciit.edu.ph", "jillan.macalintal@ciit.edu.ph"],
+  teachers: [
+    "nicole.lictaoa@ciit.edu.ph",
+    "noelle.dianzon@ciit.edu.ph",
+    "julius.torrecarion@ciit.edu.ph",
+    "ferdinand.tolentino@ciit.edu.ph",
+  ],
+},
+```
+
+> **Important:** also mirror the **admins** list inside `firestore.rules`
+> (the `admins()` function) and re-**Publish**, so the database enforces the
+> same rules. Teachers don't need listing in the rules — they're recognised by
+> the `teacherEmail` stored on each class/record.
+
+### Sample users to test each role
+
+| Role | Sign in as | You should see |
+| --- | --- | --- |
+| **Admin** | `kristine.dipalac@ciit.edu.ph` (or `jillan.macalintal@ciit.edu.ph`) | All classes, **＋ New class**, Manage Data, full editing. Badge reads "Admin". |
+| **Teacher** | `nicole.lictaoa@ciit.edu.ph` (or any teacher email) | Only classes assigned to them, no New/Delete, "Edit readings" only. Badge reads "Teacher". |
+| **Student** | Any other CIIT student account, e.g. `juan.delacruz@ciit.edu.ph` | Just **My Scorecard** with their own record(s), readings editable, personal info locked. Badge reads "Student". |
+
+To try the Student view before real students log in, an Admin can add a test
+student to a class using an email you control (any `@ciit.edu.ph` account that
+isn't an admin/teacher), then sign in with that account.
+
+> **Migrating older records:** records created before roles existed have no
+> `teacherEmail`, so teachers won't see them yet. As an Admin, open each class
+> and click **Edit class → Save** once — this stamps the assigned teacher onto
+> all of that class's student scorecards.
+
+---
+
 ## Project structure
 
 ```

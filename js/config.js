@@ -27,6 +27,29 @@ window.PFT_CONFIG = {
   // Leave the list empty to allow any Google account.
   allowedEmailDomains: ["ciit.edu.ph"],
 
+  // ---- User roles ----
+  // Three kinds of user (matched by their signed-in email, case-insensitive):
+  //   • Admin   — can do everything.
+  //   • Teacher — sees only the classes assigned to them and may edit the
+  //               students' fitness readings (not their personal info).
+  //   • Student — anyone else with an allowed email; sees and edits only
+  //               their own scorecard readings.
+  // List the admin and teacher emails below. Everyone else is a student.
+  // NOTE: also mirror these lists in firestore.rules (admins/teachers) so the
+  // database enforces the same rules.
+  roles: {
+    admins: [
+      "kristine.dipalac@ciit.edu.ph",
+      "jillan.macalintal@ciit.edu.ph",
+    ],
+    teachers: [
+      "nicole.lictaoa@ciit.edu.ph",
+      "noelle.dianzon@ciit.edu.ph",
+      "julius.torrecarion@ciit.edu.ph",
+      "ferdinand.tolentino@ciit.edu.ph",
+    ],
+  },
+
   // ---- Shared login + database (Firebase) ----
   // Turn this on to require real "Sign in with Google" (restricted to the
   // domains in allowedEmailDomains) AND make every teacher share the same

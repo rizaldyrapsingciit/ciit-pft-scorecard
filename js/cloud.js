@@ -78,18 +78,38 @@ window.Cloud = (function () {
   }
 
   // Begin live sync. `cb` is called with {records, classes} on every change.
-  function start(cb) {
+  // `opts` = { role, email } — the security rules only allow admins to read
+  // everything, so teachers/students must query a filtered subset that matches
+  // what the rules permit (an unfiltered query would be rejected outright).
+  function start(cb, opts) {
     if (!enabled) return;
     dataCb = cb;
     stop();
-    unsub.push(db.collection("records").onSnapshot(
+    const role = opts && opts.role;
+    const email = opts && opts.email;
+
+    let recQ = db.collection("records");
+    let clsQ = db.collection("classes");
+    if (role === "teacher") {
+      recQ = recQ.where("teacherEmail", "==", email);
+      clsQ = clsQ.where("teacherEmail", "==", email);
+    } else if (role === "student") {
+      recQ = recQ.where("email", "==", email);
+      clsQ = null; // students don't read the classes collection
+    }
+
+    unsub.push(recQ.onSnapshot(
       (snap) => { latestRecords = snap.docs.map((d) => d.data()); emit(); },
       (err) => console.error("[Cloud] records sync error:", err)
     ));
-    unsub.push(db.collection("classes").onSnapshot(
-      (snap) => { latestClasses = snap.docs.map((d) => d.data()); emit(); },
-      (err) => console.error("[Cloud] classes sync error:", err)
-    ));
+    if (clsQ) {
+      unsub.push(clsQ.onSnapshot(
+        (snap) => { latestClasses = snap.docs.map((d) => d.data()); emit(); },
+        (err) => console.error("[Cloud] classes sync error:", err)
+      ));
+    } else {
+      latestClasses = [];
+    }
   }
 
   function stop() {
