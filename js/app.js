@@ -2050,7 +2050,8 @@
   function scoreCardHTML(r) {
     const thr = Scoring.targetHeartRate(r.age, r.rhr);
     const thrText = thr && thr.moderateLow
-      ? `MHR ${thr.mhr} • Moderate ${thr.moderateLow}–${thr.moderateHigh} • Vigorous ≤ ${thr.vigorousHigh} bpm` : "";
+      ? `Max HR <b>${thr.mhr}</b> bpm • Heart Rate Reserve <b>${thr.hrr}</b> • Moderate zone (50–70%) <b>${thr.moderateLow}–${thr.moderateHigh}</b> bpm • Vigorous zone (70–85%) <b>${thr.moderateHigh}–${thr.vigorousHigh}</b> bpm`
+      : (thr ? `Max HR <b>${thr.mhr}</b> bpm (220 − age). Add a Resting HR to compute training zones.` : "");
     return `
       <div class="scorecard">
         <div class="sc-title">
@@ -2084,11 +2085,11 @@
               ${thrText ? `<tr><td>Target Heart Rate (computed)</td><td colspan="2">${thrText}</td></tr>` : ""}
               ${row("Muscular Strength — Push-ups", r.pushups)}
               ${row("Muscular Strength — Basic Plank", r.plankTime, ratingStars(r.strengthRating))}
-              ${row("Muscular Endurance — Wall Squat (L)", r.wallSquatLeft, ratingStars(r.wallSquatLeftRating))}
-              ${row("Muscular Endurance — Wall Squat (R)", r.wallSquatRight, ratingStars(r.wallSquatRightRating))}
+              ${row("Muscular Endurance — Wall Squat (Right)", r.wallSquatRight, ratingStars(r.wallSquatRightRating))}
+              ${row("Muscular Endurance — Wall Squat (Left)", r.wallSquatLeft, ratingStars(r.wallSquatLeftRating))}
               ${row("Muscular Endurance — Sit-ups", r.situps, ratingStars(r.situpsRating))}
-              ${row("Flexibility — Zipper (L, cm)", r.zipperLeft, ratingStars(r.zipperLeftRating))}
-              ${row("Flexibility — Zipper (R, cm)", r.zipperRight, ratingStars(r.zipperRightRating))}
+              ${row("Flexibility — Zipper (Right, cm)", r.zipperRight, ratingStars(r.zipperRightRating))}
+              ${row("Flexibility — Zipper (Left, cm)", r.zipperLeft, ratingStars(r.zipperLeftRating))}
               ${row("Flexibility — Sit & Reach 1st (cm)", r.sitReach1)}
               ${row("Flexibility — Sit & Reach 2nd (cm)", r.sitReach2)}
               ${row("Flexibility — Sit & Reach 3rd (cm)", r.sitReach3)}
@@ -2103,14 +2104,31 @@
             <thead><tr><th style="width:45%">Parameter / Activity</th><th style="width:30%">Test Result</th><th>Evaluation</th></tr></thead>
             <tbody>
               ${row("Coordination — Hand-Eye (catches)", r.handEye, ratingStars(r.coordRating))}
-              ${row("Agility — T-Cone (s)", r.tCone, r.tConeRating)}
-              ${row("Speed — Shuttle Run", r.shuttleRun, ratingStars(r.speedRating))}
+              ${row("Agility — T-Cone Fastest Time (s)", r.tCone, r.tConeRating)}
+              ${row("Speed — Shuttle Run (time)", r.shuttleRun, ratingStars(r.speedRating))}
+              ${row("Power — Vertical Jump 1st (cm)", r.vJump1)}
+              ${row("Power — Vertical Jump 2nd (cm)", r.vJump2)}
+              ${row("Power — Vertical Jump 3rd (cm)", r.vJump3)}
               ${row("Power — Vertical Jump Best (cm)", r.vJumpBest, ratingStars(r.powerRating))}
-              ${row("Balance — Stork (L)", r.storkLeft, ratingStars(r.storkLeftRating))}
-              ${row("Balance — Stork (R)", r.storkRight, ratingStars(r.storkRightRating))}
-              ${row("Reaction — Ball Drop Avg (cm)", r.ballDropAvg, ratingStars(r.reactionRating))}
+              ${row("Balance — Stork Right Foot (time)", r.storkRight, ratingStars(r.storkRightRating))}
+              ${row("Balance — Stork Left Foot (time)", r.storkLeft, ratingStars(r.storkLeftRating))}
+              ${row("Reaction — Ball Drop 1st Trial (cm)", r.ballDrop1)}
+              ${row("Reaction — Ball Drop 2nd Trial (cm)", r.ballDrop2)}
+              ${row("Reaction — Ball Drop 3rd Trial (cm)", r.ballDrop3)}
+              ${row("Reaction — Ball Drop Average (cm)", r.ballDropAvg, ratingStars(r.reactionRating))}
             </tbody>
           </table>
+        </div>
+
+        <div class="sc-part">
+          <h4>Standards &amp; How Scores Are Computed</h4>
+          <div style="font-size:11.5px;color:#475569;display:grid;gap:6px;line-height:1.55;padding:10px 2px">
+            <div><b>BMI</b> = Weight (kg) ÷ Height (m)². &nbsp;Underweight &lt;18.5 &nbsp;•&nbsp; Normal 18.5–24.9 &nbsp;•&nbsp; Overweight 25.0–29.9 &nbsp;•&nbsp; Obese ≥30.0.</div>
+            <div><b>Target Heart Rate</b> (Karvonen): Max HR = 220 − age; Heart Rate Reserve (HRR) = Max HR − Resting HR; Zone = HRR × intensity% + Resting HR. Moderate = 50–70%, Vigorous = 70–85%.</div>
+            <div><b>Agility (T-Cone), seconds</b> — Excellent M&lt;9.50 / F&lt;10.50 &nbsp;•&nbsp; Good 9.51–10.50 / 10.51–11.50 &nbsp;•&nbsp; Average 10.51–11.50 / 11.51–12.50 &nbsp;•&nbsp; Poor &gt;11.50 / &gt;12.50.</div>
+            <div><b>Sit &amp; Reach</b> and <b>Ball Drop</b> results = average of 3 trials. &nbsp;<b>Vertical Jump</b> result = best of 3 trials.</div>
+            <div><b>Evaluation</b> is a 5-point scale: ★★★★★ Excellent &nbsp;•&nbsp; ★★★★ Good &nbsp;•&nbsp; ★★★ Average &nbsp;•&nbsp; ★★ Fair &nbsp;•&nbsp; ★ Needs Improvement.</div>
+          </div>
         </div>
 
         ${r.notes ? `<p style="margin-top:14px;font-size:13px"><b>Remarks:</b> ${esc(r.notes)}</p>` : ""}
@@ -2304,8 +2322,11 @@
           <div><b>Average BMI:</b> ${avgBMI}</div>
           <div><b>Avg Push-ups:</b> ${avg("pushups")}</div>
           <div><b>Avg Sit-ups:</b> ${avg("situps")}</div>
+          <div><b>Avg Sit &amp; Reach (cm):</b> ${avg("sitReachAvg")}</div>
           <div><b>Avg Hand-Eye (catches):</b> ${avg("handEye")}</div>
+          <div><b>Avg T-Cone (s):</b> ${avg("tCone")}</div>
           <div><b>Avg Vertical Jump (cm):</b> ${avg("vJumpBest")}</div>
+          <div><b>Avg Ball Drop (cm):</b> ${avg("ballDropAvg")}</div>
         </div>
 
         <div class="sc-part">
@@ -2334,6 +2355,35 @@
               <td>${esc(r.fullName || "")}</td><td>${esc(r.course || "")}</td><td>${esc(r.sectionCode || "")}</td><td>${esc(r.sex || "")}</td>
               <td>${r.bmi != null ? r.bmi : "—"}</td><td>${esc(r.bmiClass || "—")}</td>
               <td>${esc(r.pushups || "—")}</td><td>${r.tCone ? esc(r.tCone) + "s" : "—"}</td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="sc-part">
+          <h4>Trial Details — all attempts</h4>
+          <table class="sc" style="font-size:11px">
+            <thead>
+              <tr>
+                <th rowspan="2">Name</th>
+                <th colspan="4">Sit &amp; Reach (cm)</th>
+                <th colspan="4">Vertical Jump (cm)</th>
+                <th colspan="4">Ball Drop (cm)</th>
+              </tr>
+              <tr>
+                <th>1st</th><th>2nd</th><th>3rd</th><th>Avg</th>
+                <th>1st</th><th>2nd</th><th>3rd</th><th>Best</th>
+                <th>1st</th><th>2nd</th><th>3rd</th><th>Avg</th>
+              </tr>
+            </thead>
+            <tbody>${rows.map((r) => {
+              const cell = (v) => v === "" || v == null ? "—" : esc(v);
+              return `<tr>
+                <td style="text-align:left">${esc(r.fullName || "")}</td>
+                <td>${cell(r.sitReach1)}</td><td>${cell(r.sitReach2)}</td><td>${cell(r.sitReach3)}</td><td><b>${cell(r.sitReachAvg)}</b></td>
+                <td>${cell(r.vJump1)}</td><td>${cell(r.vJump2)}</td><td>${cell(r.vJump3)}</td><td><b>${cell(r.vJumpBest)}</b></td>
+                <td>${cell(r.ballDrop1)}</td><td>${cell(r.ballDrop2)}</td><td>${cell(r.ballDrop3)}</td><td><b>${cell(r.ballDropAvg)}</b></td>
+              </tr>`;
+            }).join("")}
             </tbody>
           </table>
         </div>
