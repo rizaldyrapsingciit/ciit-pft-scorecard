@@ -168,6 +168,29 @@ window.Scoring = (function () {
     return 1;
   }
 
+  /* Official CIIT push-up chart (lecture slide 20) — by age band & sex.
+   * Values are the lower bound for each star: [5=Excellent, 4=Above Avg,
+   * 3=Average, 2=Below Avg]; anything lower = 1 (Poor). Ages 16+ use 16-19. */
+  const PUSHUP_TABLE = {
+    male: { "8-9": [13, 9, 5, 1], "10-11": [16, 12, 7, 2], "12-13": [19, 13, 8, 3], "14-15": [26, 18, 10, 4], "16-19": [28, 20, 12, 5] },
+    female: { "8-9": [8, 5, 3, 1], "10-11": [10, 7, 4, 1], "12-13": [13, 9, 5, 2], "14-15": [16, 12, 7, 3], "16-19": [19, 13, 8, 4] },
+  };
+  function ageBand(age) {
+    const a = num(age);
+    if (a == null) return "16-19"; // default to the college band
+    if (a <= 9) return "8-9";
+    if (a <= 11) return "10-11";
+    if (a <= 13) return "12-13";
+    if (a <= 15) return "14-15";
+    return "16-19"; // 16-19 and older
+  }
+  function pushupRating(count, sex, age) {
+    const c = num(count);
+    if (c == null) return null;
+    const female = String(sex || "").toLowerCase().startsWith("f");
+    return bandHigher(c, (female ? PUSHUP_TABLE.female : PUSHUP_TABLE.male)[ageBand(age)]);
+  }
+
   function autoRatings(r) {
     const female = String(r.sex || "").toLowerCase().startsWith("f");
     const out = {};
@@ -175,8 +198,8 @@ window.Scoring = (function () {
 
     // Cardiovascular — Resting Heart Rate (lower is better)
     set("cardioRating", bandLower(num(r.rhr), female ? [65, 69, 78, 84] : [61, 65, 73, 81]));
-    // Muscular Strength — push-ups (higher is better)
-    set("strengthRating", bandHigher(num(r.pushups), female ? [27, 17, 6, 3] : [47, 35, 19, 11]));
+    // Muscular Strength — push-ups (official CIIT chart, by age & sex — slide 20)
+    set("strengthRating", pushupRating(r.pushups, r.sex, r.age));
     // Muscular Endurance — wall squat hold seconds (higher is better)
     const wallT = female ? [60, 45, 30, 15] : [100, 75, 50, 25];
     set("wallSquatLeftRating", bandHigher(parseDuration(r.wallSquatLeft), wallT));
