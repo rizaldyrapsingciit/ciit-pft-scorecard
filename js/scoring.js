@@ -136,6 +136,73 @@ window.Scoring = (function () {
     return "Needs Improvement";
   }
 
+  /* ---------------- Auto evaluations (general fitness norms) ----------------
+   * These give each activity a suggested 5-point star rating (5 = best) from
+   * widely-used general fitness standards for college-age students, split by
+   * sex where the norms differ. They are DEFAULTS — a teacher can override any
+   * star. (Note: these are general references, not CIIT's official charts;
+   * BMI classification and T-Cone agility use the lecture's own tables.)
+   */
+  function parseDuration(v) {
+    if (v === "" || v == null) return null;
+    if (typeof v === "string" && v.includes(":")) {
+      const p = v.split(":").map((x) => parseFloat(x));
+      if (p.every((n) => Number.isFinite(n))) return p[0] * 60 + (p[1] || 0);
+      return null;
+    }
+    return num(v);
+  }
+
+  // thresholds = [t5, t4, t3, t2] (descending). Higher measured value = better.
+  function bandHigher(v, t) {
+    if (v == null) return null;
+    if (v >= t[0]) return 5; if (v >= t[1]) return 4;
+    if (v >= t[2]) return 3; if (v >= t[3]) return 2;
+    return 1;
+  }
+  // thresholds = [t5, t4, t3, t2] (ascending). Lower measured value = better.
+  function bandLower(v, t) {
+    if (v == null) return null;
+    if (v <= t[0]) return 5; if (v <= t[1]) return 4;
+    if (v <= t[2]) return 3; if (v <= t[3]) return 2;
+    return 1;
+  }
+
+  function autoRatings(r) {
+    const female = String(r.sex || "").toLowerCase().startsWith("f");
+    const out = {};
+    const set = (key, val) => { if (val != null) out[key] = val; };
+
+    // Cardiovascular — Resting Heart Rate (lower is better)
+    set("cardioRating", bandLower(num(r.rhr), female ? [65, 69, 78, 84] : [61, 65, 73, 81]));
+    // Muscular Strength — push-ups (higher is better)
+    set("strengthRating", bandHigher(num(r.pushups), female ? [27, 17, 6, 3] : [47, 35, 19, 11]));
+    // Muscular Endurance — wall squat hold seconds (higher is better)
+    const wallT = female ? [60, 45, 30, 15] : [100, 75, 50, 25];
+    set("wallSquatLeftRating", bandHigher(parseDuration(r.wallSquatLeft), wallT));
+    set("wallSquatRightRating", bandHigher(parseDuration(r.wallSquatRight), wallT));
+    // Muscular Endurance — sit-ups (higher is better)
+    set("situpsRating", bandHigher(num(r.situps), female ? [40, 33, 29, 25] : [45, 38, 33, 28]));
+    // Flexibility — zipper test overlap(+)/gap(-) in cm (higher is better)
+    set("zipperLeftRating", bandHigher(num(r.zipperLeft), [5, 0, -5, -10]));
+    set("zipperRightRating", bandHigher(num(r.zipperRight), [5, 0, -5, -10]));
+    // Flexibility — sit & reach average cm (higher is better)
+    set("sitReachAvgRating", bandHigher(num(r.sitReachAvg), female ? [30, 21, 11, 1] : [27, 17, 6, 0]));
+    // Coordination — hand-eye catches (higher is better; lecture catch scale)
+    set("coordRating", bandHigher(num(r.handEye), [9, 7, 4, 2]));
+    // Speed — shuttle run seconds (lower is better)
+    set("speedRating", bandLower(parseDuration(r.shuttleRun), female ? [10.5, 11.5, 12.5, 13.5] : [9.5, 10.5, 11.5, 12.5]));
+    // Power — vertical jump best cm (higher is better)
+    set("powerRating", bandHigher(num(r.vJumpBest), female ? [46, 36, 26, 16] : [60, 50, 40, 30]));
+    // Balance — stork stand seconds (higher is better)
+    set("storkLeftRating", bandHigher(parseDuration(r.storkLeft), [50, 40, 25, 10]));
+    set("storkRightRating", bandHigher(parseDuration(r.storkRight), [50, 40, 25, 10]));
+    // Reaction — ball drop distance cm (lower is better)
+    set("reactionRating", bandLower(num(r.ballDropAvg), [7.5, 16, 20.5, 28]));
+
+    return out;
+  }
+
   /* ---------------- Simple math helpers used by the form ---------------- */
   function average(values) {
     const nums = values.map(num).filter((v) => v !== null);
@@ -164,6 +231,7 @@ window.Scoring = (function () {
     targetHeartRate,
     stairClimb,
     tConeRating,
+    autoRatings,
     average,
     best,
     ratingPoints,

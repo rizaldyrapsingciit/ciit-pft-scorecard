@@ -743,8 +743,18 @@
     r.vJumpBest = Scoring.best([r.vJump1, r.vJump2, r.vJump3], "max");
     r.ballDropAvg = Scoring.average([r.ballDrop1, r.ballDrop2, r.ballDrop3]);
     r.tConeRating = Scoring.tConeRating(r.tCone, r.sex);
+    // Suggested 5-star evaluations from general fitness norms — only fill the
+    // ones the teacher has left blank (manual ratings are always respected).
+    const auto = Scoring.autoRatings(r);
+    Object.keys(auto).forEach((k) => {
+      if (r[k] === "" || r[k] == null) r[k] = auto[k];
+    });
     return r;
   }
+
+  // Rating field keys (used to auto-fill star widgets on the entry form).
+  const RATING_KEYS = [].concat(HRF, SRF)
+    .reduce((acc, sec) => acc.concat(sec.fields.filter((f) => f.rating).map((f) => f.k)), []);
 
   /* ============================================================
    * Router
@@ -1481,7 +1491,7 @@
   function ratingLegendHTML() {
     const items = Scoring.RATING_SCALE.map((r) =>
       `<span class="rl-item"><span class="rl-stars">${"★".repeat(r.value)}</span> ${r.value} = ${esc(r.label)}</span>`).join("");
-    return `<div class="rating-legend"><span class="rl-title">Evaluation scale — tap the stars:</span>${items}</div>`;
+    return `<div class="rating-legend"><span class="rl-title">Evaluation scale — auto-filled from results; tap a star to override (✕ to reset):</span>${items}</div>`;
   }
 
   function renderEntry(c, id) {
@@ -1598,6 +1608,10 @@
       window.scrollTo(0, 0);
     });
 
+    // Remembers the last value we auto-filled for each rating, so we can tell
+    // a teacher's manual override apart from an untouched (auto) star.
+    const autoShadow = {};
+
     // Star ratings (event delegation)
     form.addEventListener("click", (e) => {
       const star = e.target.closest(".star");
@@ -1613,6 +1627,8 @@
       }
       input.value = val || "";
       paintStars(box, val);
+      // Clearing (✕ or toggling off) reverts that star to the auto suggestion.
+      recompute();
     });
 
     const recompute = () => {
@@ -1621,6 +1637,23 @@
       ["bmi", "bmiClass", "sitReachAvg", "vJumpBest", "ballDropAvg", "tConeRating"].forEach((k) => {
         const el = $(`[data-k="${k}"]`, form);
         if (el) el.value = draft[k] == null ? "" : draft[k];
+      });
+      // Auto-fill the 5-star evaluations from general norms, unless a teacher
+      // has manually overridden a star (kept if it differs from our last auto).
+      const auto = Scoring.autoRatings(draft);
+      RATING_KEYS.forEach((k) => {
+        const input = $(`input[data-k="${k}"]`, form);
+        if (!input) return;
+        const box = input.closest("[data-stars]");
+        const autoVal = auto[k] != null ? auto[k] : null;
+        const cur = input.value === "" ? null : parseInt(input.value, 10);
+        const shadow = autoShadow[k] != null ? autoShadow[k] : null;
+        const autoControlled = cur == null || cur === shadow;
+        if (autoControlled) {
+          input.value = autoVal || "";
+          if (box) paintStars(box, autoVal || 0);
+          autoShadow[k] = autoVal;
+        }
       });
       // Age is derived from Birthday when one is given; otherwise stays editable
       const ageEl = $('[data-k="age"]', form);
