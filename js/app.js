@@ -2447,6 +2447,7 @@
     modal({
       title: "How to use this system",
       body: `
+        <div style="max-height:68vh;overflow:auto;padding-right:4px">
         <p><b>1. Dashboard</b> — see totals and charts about your class at a glance.</p>
         <p><b>2. New / Edit Scorecard</b> — type a student's test results. BMI, averages,
         best scores, agility rating and target heart rate are computed for you.</p>
@@ -2454,8 +2455,34 @@
         <b>Backup</b> to save a file and <b>Restore</b> to load it on another computer.</p>
         <p><b>4. Reports</b> — open a student's printable scorecard or a class summary,
         then click <b>Print / Save PDF</b>.</p>
-        <p style="color:var(--ink-3)">Your data is saved privately in this browser on this computer.
-        Make regular backups from Manage Data.</p>`,
+
+        <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+        <p style="margin:0 0 6px"><b>How each ⭐ Evaluation is computed</b></p>
+        <p style="margin:0 0 8px;color:var(--ink-3)">Stars are filled in automatically from the
+        student's results (and their sex, where standards differ). Tap a star to set your own
+        rating; tap the <b>✕</b> to clear it and go back to the automatic one.</p>
+        <p style="margin:0 0 4px;color:#15803d"><b>From the PATHFIT lecture (official):</b></p>
+        <ul style="margin:0 0 10px;padding-left:18px;line-height:1.6">
+          <li><b>BMI classification</b> = Weight (kg) ÷ Height (m)² — slides 12–16.</li>
+          <li><b>Target Heart Rate</b> (Max HR = 220 − age → zones) — slides 5–11.</li>
+          <li><b>Agility (T-Cone)</b> rated from the time, by sex — slide 28.</li>
+        </ul>
+        <p style="margin:0 0 4px;color:#b45309"><b>From general fitness norms (adjustable):</b></p>
+        <ul style="margin:0 0 10px;padding-left:18px;line-height:1.6">
+          <li><b>Cardiovascular</b> ← Resting Heart Rate (lower is better)</li>
+          <li><b>Muscular Strength</b> ← number of push-ups</li>
+          <li><b>Muscular Endurance</b> ← wall-squat hold time &amp; number of sit-ups</li>
+          <li><b>Flexibility</b> ← zipper test &amp; sit-and-reach average</li>
+          <li><b>Coordination</b> ← hand-eye catches</li>
+          <li><b>Speed</b> ← shuttle-run time (lower is better)</li>
+          <li><b>Power</b> ← vertical jump (best of 3)</li>
+          <li><b>Balance</b> ← stork-stand time</li>
+          <li><b>Reaction</b> ← ball-drop distance in cm (lower is better)</li>
+        </ul>
+        <p style="margin:0;color:var(--ink-3)">Scale: ★★★★★ Excellent • ★★★★ Good • ★★★ Average •
+        ★★ Fair • ★ Needs Improvement. The general-norm cut-offs can be replaced with CIIT's
+        official charts anytime.</p>
+        </div>`,
       actions: [{ label: "Got it", class: "btn-primary" }],
     });
   }
