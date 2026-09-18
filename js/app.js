@@ -2465,18 +2465,20 @@
         <ul style="margin:0 0 10px;padding-left:18px;line-height:1.6">
           <li><b>BMI classification</b> = Weight (kg) ÷ Height (m)² — slides 12–16.</li>
           <li><b>Target Heart Rate</b> (Max HR = 220 − age → zones) — slides 5–11.</li>
-          <li><b>Muscular Strength (push-ups)</b> — official chart by age &amp; sex — slide 20.</li>
-          <li><b>Agility (T-Cone)</b> rated from the time, by sex — slide 28.</li>
+          <li><b>Muscular Strength (push-ups)</b> — by age &amp; sex — slide 20.</li>
+          <li><b>Muscular Endurance (wall squat)</b> — by age &amp; sex — slide 22.</li>
+          <li><b>Flexibility (sit &amp; reach)</b> — by sex — slide 24.</li>
+          <li><b>Coordination (hand-eye)</b> — by age — slide 26.</li>
+          <li><b>Agility (T-Cone)</b> — from the time, by sex — slide 28.</li>
+          <li><b>Power (vertical jump)</b> — by sex — slide 30.</li>
+          <li><b>Balance (stork stand)</b> — by age &amp; sex — slide 32.</li>
         </ul>
         <p style="margin:0 0 4px;color:#b45309"><b>From general fitness norms (adjustable):</b></p>
         <ul style="margin:0 0 10px;padding-left:18px;line-height:1.6">
           <li><b>Cardiovascular</b> ← Resting Heart Rate (lower is better)</li>
-          <li><b>Muscular Endurance</b> ← wall-squat hold time &amp; number of sit-ups</li>
-          <li><b>Flexibility</b> ← zipper test &amp; sit-and-reach average</li>
-          <li><b>Coordination</b> ← hand-eye catches</li>
+          <li><b>Muscular Endurance</b> ← number of sit-ups</li>
+          <li><b>Flexibility</b> ← zipper test overlap/gap</li>
           <li><b>Speed</b> ← shuttle-run time (lower is better)</li>
-          <li><b>Power</b> ← vertical jump (best of 3)</li>
-          <li><b>Balance</b> ← stork-stand time</li>
           <li><b>Reaction</b> ← ball-drop distance in cm (lower is better)</li>
         </ul>
         <p style="margin:0;color:var(--ink-3)">Scale: ★★★★★ Excellent • ★★★★ Good • ★★★ Average •

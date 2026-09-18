@@ -168,6 +168,18 @@ window.Scoring = (function () {
     return 1;
   }
 
+  // Like bandHigher, but the top tier is EXCLUSIVE — matches the charts'
+  // ">X" Excellent band with "lower-X" Above-Average band. t = [aboveAvgTop,
+  // aboveAvgLower, averageLower, belowAvgLower]; below belowAvgLower = Poor (1).
+  function bandHigherEx(v, t) {
+    if (v == null) return null;
+    if (v > t[0]) return 5;
+    if (v >= t[1]) return 4;
+    if (v >= t[2]) return 3;
+    if (v >= t[3]) return 2;
+    return 1;
+  }
+
   /* Official CIIT push-up chart (lecture slide 20) — by age band & sex.
    * Values are the lower bound for each star: [5=Excellent, 4=Above Avg,
    * 3=Average, 2=Below Avg]; anything lower = 1 (Poor). Ages 16+ use 16-19. */
@@ -191,6 +203,53 @@ window.Scoring = (function () {
     return bandHigher(c, (female ? PUSHUP_TABLE.female : PUSHUP_TABLE.male)[ageBand(age)]);
   }
 
+  /* Official CIIT charts (lecture) — tiers are [aboveAvgTop, aboveAvgLower,
+   * averageLower, belowAvgLower], scored with bandHigherEx. Ages 16+ = 16-19. */
+
+  // Wall Squat — seconds, age & sex (slide 22)
+  const WALLSQUAT_TABLE = {
+    male: { "8-9": [62, 36, 18, 5], "10-11": [72, 46, 28, 8], "12-13": [82, 56, 38, 10], "14-15": [92, 66, 48, 20], "16-19": [102, 76, 58, 30] },
+    female: { "8-9": [20, 10, 6, 3], "10-11": [30, 16, 10, 5], "12-13": [40, 26, 16, 10], "14-15": [50, 36, 26, 15], "16-19": [60, 46, 36, 20] },
+  };
+  // Stork Balance — seconds, age & sex (slide 32)
+  const STORK_TABLE = {
+    male: { "8-9": [30, 21, 11, 2], "10-11": [35, 26, 16, 5], "12-13": [40, 31, 21, 10], "14-15": [45, 36, 26, 15], "16-19": [50, 41, 31, 20] },
+    female: { "8-9": [15, 12, 7, 2], "10-11": [18, 14, 9, 4], "12-13": [21, 18, 11, 6], "14-15": [25, 20, 13, 8], "16-19": [30, 23, 16, 10] },
+  };
+  // Hand-Eye Coordination — catches, age only (slide 26)
+  const HANDEYE_TABLE = {
+    "8-9": [11, 8, 6, 3], "10-11": [17, 13, 8, 3], "12-13": [23, 19, 14, 10], "14-15": [30, 25, 20, 15], "16-19": [35, 30, 25, 20],
+  };
+
+  const isFemale = (sex) => String(sex || "").toLowerCase().startsWith("f");
+
+  function wallSquatRating(sec, sex, age) {
+    if (sec == null) return null;
+    return bandHigherEx(sec, (isFemale(sex) ? WALLSQUAT_TABLE.female : WALLSQUAT_TABLE.male)[ageBand(age)]);
+  }
+  function storkRating(sec, sex, age) {
+    if (sec == null) return null;
+    return bandHigherEx(sec, (isFemale(sex) ? STORK_TABLE.female : STORK_TABLE.male)[ageBand(age)]);
+  }
+  function handEyeRating(catches, age) {
+    const c = num(catches);
+    if (c == null) return null;
+    return bandHigherEx(c, HANDEYE_TABLE[ageBand(age)]);
+  }
+  // Sit & Reach — cm, sex only (slide 24)
+  function sitReachRating(cm, sex) {
+    const c = num(cm);
+    if (c == null) return null;
+    return bandHigherEx(c, isFemale(sex) ? [15, 12, 7, 4] : [14, 11, 7, 4]);
+  }
+  // Vertical Jump — cm, sex only (slide 30). 7 tiers collapsed to 5 (Excellent
+  // + Very Good = 5; Above Avg = 4; Average = 3; Below Avg = 2; Poor/V.Poor = 1).
+  function jumpRating(cm, sex) {
+    const c = num(cm);
+    if (c == null) return null;
+    return bandHigher(c, isFemale(sex) ? [51, 41, 31, 21] : [61, 51, 41, 31]);
+  }
+
   function autoRatings(r) {
     const female = String(r.sex || "").toLowerCase().startsWith("f");
     const out = {};
@@ -200,26 +259,25 @@ window.Scoring = (function () {
     set("cardioRating", bandLower(num(r.rhr), female ? [65, 69, 78, 84] : [61, 65, 73, 81]));
     // Muscular Strength — push-ups (official CIIT chart, by age & sex — slide 20)
     set("strengthRating", pushupRating(r.pushups, r.sex, r.age));
-    // Muscular Endurance — wall squat hold seconds (higher is better)
-    const wallT = female ? [60, 45, 30, 15] : [100, 75, 50, 25];
-    set("wallSquatLeftRating", bandHigher(parseDuration(r.wallSquatLeft), wallT));
-    set("wallSquatRightRating", bandHigher(parseDuration(r.wallSquatRight), wallT));
-    // Muscular Endurance — sit-ups (higher is better)
+    // Muscular Endurance — wall squat (official CIIT chart, age & sex — slide 22)
+    set("wallSquatLeftRating", wallSquatRating(parseDuration(r.wallSquatLeft), r.sex, r.age));
+    set("wallSquatRightRating", wallSquatRating(parseDuration(r.wallSquatRight), r.sex, r.age));
+    // Muscular Endurance — sit-ups (general norm; no official chart provided)
     set("situpsRating", bandHigher(num(r.situps), female ? [40, 33, 29, 25] : [45, 38, 33, 28]));
-    // Flexibility — zipper test overlap(+)/gap(-) in cm (higher is better)
+    // Flexibility — zipper test overlap(+)/gap(-) in cm (general norm)
     set("zipperLeftRating", bandHigher(num(r.zipperLeft), [5, 0, -5, -10]));
     set("zipperRightRating", bandHigher(num(r.zipperRight), [5, 0, -5, -10]));
-    // Flexibility — sit & reach average cm (higher is better)
-    set("sitReachAvgRating", bandHigher(num(r.sitReachAvg), female ? [30, 21, 11, 1] : [27, 17, 6, 0]));
-    // Coordination — hand-eye catches (higher is better; lecture catch scale)
-    set("coordRating", bandHigher(num(r.handEye), [9, 7, 4, 2]));
-    // Speed — shuttle run seconds (lower is better)
+    // Flexibility — sit & reach average (official CIIT chart, by sex — slide 24)
+    set("sitReachAvgRating", sitReachRating(r.sitReachAvg, r.sex));
+    // Coordination — hand-eye catches (official CIIT chart, by age — slide 26)
+    set("coordRating", handEyeRating(r.handEye, r.age));
+    // Speed — shuttle run seconds (general norm; no official chart provided)
     set("speedRating", bandLower(parseDuration(r.shuttleRun), female ? [10.5, 11.5, 12.5, 13.5] : [9.5, 10.5, 11.5, 12.5]));
-    // Power — vertical jump best cm (higher is better)
-    set("powerRating", bandHigher(num(r.vJumpBest), female ? [46, 36, 26, 16] : [60, 50, 40, 30]));
-    // Balance — stork stand seconds (higher is better)
-    set("storkLeftRating", bandHigher(parseDuration(r.storkLeft), [50, 40, 25, 10]));
-    set("storkRightRating", bandHigher(parseDuration(r.storkRight), [50, 40, 25, 10]));
+    // Power — vertical jump best cm (official CIIT chart, by sex — slide 30)
+    set("powerRating", jumpRating(r.vJumpBest, r.sex));
+    // Balance — stork stand (official CIIT chart, age & sex — slide 32)
+    set("storkLeftRating", storkRating(parseDuration(r.storkLeft), r.sex, r.age));
+    set("storkRightRating", storkRating(parseDuration(r.storkRight), r.sex, r.age));
     // Reaction — ball drop distance cm (lower is better)
     set("reactionRating", bandLower(num(r.ballDropAvg), [7.5, 16, 20.5, 28]));
 
